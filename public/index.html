@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão NFC Pro | Sistema de Controle de Placas NFC</title>
+  <meta name="description" content="Sistema profissional de gestão financeira, controle de materiais, vendas e participação de sócios para placas NFC personalizadas.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- HEADER MOBILE -->
+    <header class="app-header" role="banner">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">⚡</div>
+        <div class="brand-text">
+          <h1>NFC Gestão Pro</h1>
+          <span>Painel Comercial</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-quick-sale-mobile" class="btn btn-primary btn-sm" aria-label="Nova Venda Rápida">
+          + Venda
+        </button>
+      </div>
+    </header>
+
+    <!-- SIDEBAR DESKTOP -->
+    <aside class="app-sidebar" role="navigation" aria-label="Navegação Lateral">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">⚡</div>
+        <div class="brand-text">
+          <h1>NFC Gestão Pro</h1>
+          <span>Painel Comercial</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-link active" data-tab="dashboard" aria-current="page">
+          <span class="icon">📊</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-link" data-tab="vendas">
+          <span class="icon">💰</span>
+          <span>Vendas</span>
+        </button>
+        <button class="nav-link" data-tab="gastos">
+          <span class="icon">📦</span>
+          <span>Gastos & Materiais</span>
+        </button>
+        <button class="nav-link" data-tab="modelos">
+          <span class="icon">🏷️</span>
+          <span>Modelos de Placas</span>
+        </button>
+        <button class="nav-link" data-tab="socios">
+          <span class="icon">👥</span>
+          <span>Sócios & Vendedores</span>
+        </button>
+        <button class="nav-link" data-tab="relatorios">
+          <span class="icon">📈</span>
+          <span>Relatórios</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--text-dim);">
+        <p>Sistema Ativo v1.0</p>
+        <p>Base: SQLite Nativo</p>
+      </div>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="main-content" role="main">
+
+      <!-- ========================================== -->
+      <!-- ABA 1: DASHBOARD                           -->
+      <!-- ========================================== -->
+      <section id="tab-dashboard" class="tab-content active" aria-labelledby="title-dashboard">
+        <div class="section-header">
+          <div>
+            <h2 id="title-dashboard" class="section-title">Visão Geral do Negócio</h2>
+            <p class="section-subtitle">Monitore vendas, custos, lucro estimado e participação dos sócios.</p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-new-sale-dash" class="btn btn-primary">
+              <span>+ Registrar Venda</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Barra de Filtros de Período -->
+        <nav class="filter-bar" aria-label="Filtro de Período">
+          <button class="filter-btn active" data-period="all">Todo o Período</button>
+          <button class="filter-btn" data-period="today">Hoje</button>
+          <button class="filter-btn" data-period="7days">Últimos 7 dias</button>
+          <button class="filter-btn" data-period="week">Esta Semana</button>
+          <button class="filter-btn" data-period="month">Este Mês</button>
+          <button class="filter-btn" data-period="year">Este Ano</button>
+          <button class="filter-btn" data-period="custom">Personalizado</button>
+        </nav>
+
+        <!-- Filtro de Data Personalizada (Oculto por padrão) -->
+        <div id="custom-date-container" class="card" style="display: none; margin-bottom: 1.25rem; padding: 1rem;">
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="custom-start-date" class="form-label">Data Inicial</label>
+              <input type="date" id="custom-start-date" class="form-control">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="custom-end-date" class="form-label">Data Final</label>
+              <input type="date" id="custom-end-date" class="form-control">
+            </div>
+          </div>
+          <button id="btn-apply-custom-dates" class="btn btn-primary btn-sm" style="margin-top: 0.75rem;">
+            Aplicar Filtro
+          </button>
+        </div>
+
+        <!-- Grade de Indicadores (KPIs) -->
+        <div class="kpi-grid">
+          <!-- Total Vendas -->
+          <div class="card">
+            <div class="card-accent-top card-accent-cyan"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">Faturamento</span>
+              <span class="kpi-icon">💰</span>
+            </div>
+            <div id="kpi-revenue" class="kpi-value">R$ 0,00</div>
+            <span id="kpi-sales-count" class="kpi-detail">0 transações</span>
+          </div>
+
+          <!-- Total Placas Vendidas -->
+          <div class="card">
+            <div class="card-accent-top card-accent-blue"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">Placas Vendidas</span>
+              <span class="kpi-icon">🏷️</span>
+            </div>
+            <div id="kpi-plaques-sold" class="kpi-value">0</div>
+            <span class="kpi-detail">unidades entregues</span>
+          </div>
+
+          <!-- Ticket Médio por Placa -->
+          <div class="card">
+            <div class="card-accent-top card-accent-indigo"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">Preço Médio / Unid.</span>
+              <span class="kpi-icon">🎯</span>
+            </div>
+            <div id="kpi-ticket-unit" class="kpi-value">R$ 0,00</div>
+            <span class="kpi-detail">média por placa</span>
+          </div>
+
+          <!-- Total Gastos com Materiais -->
+          <div class="card">
+            <div class="card-accent-top card-accent-rose"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">Custos / Materiais</span>
+              <span class="kpi-icon">📦</span>
+            </div>
+            <div id="kpi-expenses" class="kpi-value">R$ 0,00</div>
+            <span class="kpi-detail">compras e insumos</span>
+          </div>
+
+          <!-- Lucro Líquido Estimado -->
+          <div class="card">
+            <div class="card-accent-top card-accent-emerald"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">Lucro Operacional</span>
+              <span class="kpi-icon">📈</span>
+            </div>
+            <div id="kpi-profit" class="kpi-value positive">R$ 0,00</div>
+            <span id="kpi-margin" class="kpi-detail">Margem: 0%</span>
+          </div>
+
+          <!-- Destaque: Melhor Vendedor -->
+          <div class="card">
+            <div class="card-accent-top card-accent-amber"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">Top Vendedor</span>
+              <span class="kpi-icon">🏆</span>
+            </div>
+            <div id="kpi-best-seller" class="kpi-value" style="font-size: 1.1rem;">-</div>
+            <span id="kpi-best-seller-amount" class="kpi-detail">-</span>
+          </div>
+        </div>
+
+        <!-- Seção de Gráficos e Divisão dos Sócios -->
+        <div class="charts-grid">
+          <!-- Gráfico de Evolução Financeira -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 class="chart-title">Evolução: Vendas vs Custos</h3>
+              <div class="chart-legend">
+                <div class="legend-item">
+                  <span class="legend-dot" style="background: var(--accent-cyan);"></span>
+                  <span>Vendas</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-dot" style="background: var(--accent-rose);"></span>
+                  <span>Custos</span>
+                </div>
+              </div>
+            </div>
+            <div id="timeline-chart" class="chart-container">
+              <!-- Preenchido dinamicamente via JS -->
+            </div>
+          </div>
+
+          <!-- Card de Participação dos Sócios -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 class="chart-title">Participação dos Sócios</h3>
+            </div>
+            <div id="sellers-share-list">
+              <!-- Preenchido dinamicamente via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Distribuição por Modelo de Placa -->
+        <div class="card" style="margin-top: 1.25rem;">
+          <h3 class="chart-title" style="margin-bottom: 1rem;">Vendas por Modelo de Placa</h3>
+          <div id="models-distribution-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+            <!-- Preenchido dinamicamente -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- ABA 2: VENDAS                              -->
+      <!-- ========================================== -->
+      <section id="tab-vendas" class="tab-content" aria-labelledby="title-vendas">
+        <div class="section-header">
+          <div>
+            <h2 id="title-vendas" class="section-title">Controle de Vendas</h2>
+            <p class="section-subtitle">Registre e gerencie todas as vendas de placas NFC.</p>
+          </div>
+          <button id="btn-open-modal-sale" class="btn btn-primary">
+            + Registrar Venda
+          </button>
+        </div>
+
+        <!-- Filtros e Busca de Vendas -->
+        <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+          <div class="form-row">
+            <div>
+              <label for="filter-sales-search" class="form-label">Buscar por Cliente</label>
+              <input type="text" id="filter-sales-search" class="form-control" placeholder="Digite o nome do cliente...">
+            </div>
+            <div>
+              <label for="filter-sales-seller" class="form-label">Filtrar por Vendedor</label>
+              <select id="filter-sales-seller" class="form-control">
+                <option value="all">Todos os Vendedores</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela de Vendas -->
+        <div class="table-wrapper">
+          <table aria-label="Tabela de Vendas">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Cliente</th>
+                <th>Modelo da Placa</th>
+                <th>Qtd</th>
+                <th>Valor Unit.</th>
+                <th>Total</th>
+                <th>Vendedor</th>
+                <th>Pagamento</th>
+                <th style="text-align: right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="sales-table-body">
+              <!-- Renderizado dinamicamente -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- ABA 3: GASTOS E MATERIAIS                  -->
+      <!-- ========================================== -->
+      <section id="tab-gastos" class="tab-content" aria-labelledby="title-gastos">
+        <div class="section-header">
+          <div>
+            <h2 id="title-gastos" class="section-title">Controle de Gastos & Materiais</h2>
+            <p class="section-subtitle">Cadastre compras de placas, tags NFC, fretes, adesivos e insumos.</p>
+          </div>
+          <button id="btn-open-modal-expense" class="btn btn-primary">
+            + Novo Gasto
+          </button>
+        </div>
+
+        <!-- Mini Resumo de Gastos -->
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.25rem;">
+          <div class="card">
+            <div class="kpi-title">Total Gasto em Materiais</div>
+            <div id="expense-summary-total" class="kpi-value" style="color: var(--accent-rose);">R$ 0,00</div>
+          </div>
+          <div class="card">
+            <div class="kpi-title">Custo Médio Unitário</div>
+            <div id="expense-summary-avg" class="kpi-value">R$ 0,00</div>
+          </div>
+          <div class="card">
+            <div class="kpi-title">Total de Itens Adquiridos</div>
+            <div id="expense-summary-qty" class="kpi-value">0</div>
+          </div>
+        </div>
+
+        <!-- Gastos por Categoria -->
+        <div class="card" style="margin-bottom: 1.25rem;">
+          <h3 class="chart-title" style="margin-bottom: 0.75rem;">Gastos por Categoria</h3>
+          <div id="expenses-category-breakdown" style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+            <!-- Renderizado dinamicamente -->
+          </div>
+        </div>
+
+        <!-- Tabela de Gastos -->
+        <div class="table-wrapper">
+          <table aria-label="Tabela de Gastos e Materiais">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Material / Insumo</th>
+                <th>Categoria</th>
+                <th>Qtd</th>
+                <th>Valor Unit.</th>
+                <th>Total</th>
+                <th>Fornecedor</th>
+                <th>Obs.</th>
+                <th style="text-align: right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="expenses-table-body">
+              <!-- Renderizado dinamicamente -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- ABA 4: MODELOS DE PLACAS                   -->
+      <!-- ========================================== -->
+      <section id="tab-modelos" class="tab-content" aria-labelledby="title-modelos">
+        <div class="section-header">
+          <div>
+            <h2 id="title-modelos" class="section-title">Modelos de Placas NFC</h2>
+            <p class="section-subtitle">Cadastre novos modelos, edite características e altere preços de venda.</p>
+          </div>
+          <button id="btn-open-modal-model" class="btn btn-primary">
+            + Novo Modelo
+          </button>
+        </div>
+
+        <div id="models-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+          <!-- Cards de modelos renderizados dinamicamente -->
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- ABA 5: SÓCIOS E VENDEDORES                 -->
+      <!-- ========================================== -->
+      <section id="tab-socios" class="tab-content" aria-labelledby="title-socios">
+        <div class="section-header">
+          <div>
+            <h2 id="title-socios" class="section-title">Sócios & Equipe de Vendas</h2>
+            <p class="section-subtitle">Desempenho individual, métricas de vendas e participação dos sócios.</p>
+          </div>
+          <button id="btn-open-modal-seller" class="btn btn-primary">
+            + Adicionar Pessoa
+          </button>
+        </div>
+
+        <div id="sellers-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem;">
+          <!-- Cards de sócios renderizados dinamicamente -->
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- ABA 6: RELATÓRIOS                          -->
+      <!-- ========================================== -->
+      <section id="tab-relatorios" class="tab-content" aria-labelledby="title-relatorios">
+        <div class="section-header">
+          <div>
+            <h2 id="title-relatorios" class="section-title">Relatórios Financeiros</h2>
+            <p class="section-subtitle">Acompanhe o crescimento e evolução das vendas por períodos.</p>
+          </div>
+          <!-- Agrupamento -->
+          <div class="filter-bar" style="margin-bottom: 0;">
+            <button class="filter-btn report-group-btn" data-group="day">Por Dia</button>
+            <button class="filter-btn report-group-btn" data-group="week">Por Semana</button>
+            <button class="filter-btn report-group-btn active" data-group="month">Por Mês</button>
+            <button class="filter-btn report-group-btn" data-group="year">Por Ano</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table aria-label="Tabela de Relatórios Agrupados">
+            <thead>
+              <tr>
+                <th>Período</th>
+                <th>Total de Vendas</th>
+                <th>Qtd Placas</th>
+                <th>Faturamento Total</th>
+                <th>Preço Médio / Unid.</th>
+                <th>Crescimento vs Anterior</th>
+              </tr>
+            </thead>
+            <tbody id="reports-table-body">
+              <!-- Renderizado dinamicamente -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- NAVEGAÇÃO INFERIOR MOBILE -->
+    <nav class="mobile-nav" role="navigation" aria-label="Navegação Móvel">
+      <button class="nav-link active" data-tab="dashboard">
+        <span class="icon">📊</span>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-link" data-tab="vendas">
+        <span class="icon">💰</span>
+        <span>Vendas</span>
+      </button>
+      <button class="nav-link" data-tab="gastos">
+        <span class="icon">📦</span>
+        <span>Gastos</span>
+      </button>
+      <button class="nav-link" data-tab="modelos">
+        <span class="icon">🏷️</span>
+        <span>Modelos</span>
+      </button>
+      <button class="nav-link" data-tab="socios">
+        <span class="icon">👥</span>
+        <span>Sócios</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAIS (FORMULÁRIOS DINÂMICOS COM CÁLCULOS EM TEMPO REAL)                  -->
+  <!-- ========================================================================== -->
+
+  <!-- 1. Modal de Nova Venda -->
+  <div id="modal-sale" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-sale-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-sale-title">Registrar Nova Venda</h3>
+        <button class="modal-close" data-close-modal="modal-sale" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-sale">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="sale-date" class="form-label">Data da Venda *</label>
+              <input type="date" id="sale-date" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="sale-customer" class="form-label">Nome do Cliente / Empresa *</label>
+              <input type="text" id="sale-customer" class="form-control" placeholder="Ex: Café Central" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="sale-model" class="form-label">Modelo da Placa *</label>
+              <select id="sale-model" class="form-control" required>
+                <option value="">Selecione o modelo...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="sale-seller" class="form-label">Vendedor / Sócio Responsável *</label>
+              <select id="sale-seller" class="form-control" required>
+                <option value="">Selecione quem vendeu...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="sale-quantity" class="form-label">Quantidade de Placas *</label>
+              <input type="number" id="sale-quantity" class="form-control" min="1" value="1" required>
+            </div>
+            <div class="form-group">
+              <label for="sale-price" class="form-label">Valor Unitário (R$) *</label>
+              <input type="number" id="sale-price" class="form-control" step="0.01" min="0" placeholder="0.00" required>
+            </div>
+          </div>
+
+          <div class="form-calc-hint" id="sale-calc-total">
+            Total Calculado: R$ 0,00
+          </div>
+
+          <div class="form-row" style="margin-top: 1rem;">
+            <div class="form-group">
+              <label for="sale-payment" class="form-label">Forma de Pagamento *</label>
+              <select id="sale-payment" class="form-control" required>
+                <option value="PIX">PIX</option>
+                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                <option value="Cartão de Débito">Cartão de Débito</option>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Boleto">Boleto</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="sale-notes" class="form-label">Observações (opcional)</label>
+              <input type="text" id="sale-notes" class="form-control" placeholder="Ex: link do cardápio, cores...">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-sale">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Venda</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Modal de Novo Gasto / Material -->
+  <div id="modal-expense" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-expense-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-expense-title">Cadastrar Gasto / Material</h3>
+        <button class="modal-close" data-close-modal="modal-expense" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-expense">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="expense-date" class="form-label">Data da Compra *</label>
+              <input type="date" id="expense-date" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="expense-category" class="form-label">Categoria do Gasto *</label>
+              <select id="expense-category" class="form-control" required>
+                <option value="Tags NFC">Tags NFC</option>
+                <option value="Placas">Placas / Bases</option>
+                <option value="Impressões">Impressões / Adesivos</option>
+                <option value="Embalagens">Embalagens</option>
+                <option value="Fretes">Fretes & Entregas</option>
+                <option value="Outros">Outros Materiais</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="expense-item" class="form-label">Nome do Material / Insumo *</label>
+            <input type="text" id="expense-item" class="form-control" placeholder="Ex: Lote 50 tags NTAG215" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="expense-qty" class="form-label">Quantidade Comprada *</label>
+              <input type="number" id="expense-qty" class="form-control" min="0.01" step="any" value="1" required>
+            </div>
+            <div class="form-group">
+              <label for="expense-unit-cost" class="form-label">Valor Unitário (R$) *</label>
+              <input type="number" id="expense-unit-cost" class="form-control" step="0.01" min="0" placeholder="0.00" required>
+            </div>
+          </div>
+
+          <div class="form-calc-hint" id="expense-calc-total">
+            Total Calculado: R$ 0,00
+          </div>
+
+          <div class="form-row" style="margin-top: 1rem;">
+            <div class="form-group">
+              <label for="expense-supplier" class="form-label">Fornecedor (opcional)</label>
+              <input type="text" id="expense-supplier" class="form-control" placeholder="Ex: Mercado Livre, Gráfica...">
+            </div>
+            <div class="form-group">
+              <label for="expense-notes" class="form-label">Observações</label>
+              <input type="text" id="expense-notes" class="form-control" placeholder="Ex: link do pedido, nota fiscal...">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-expense">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Gasto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Modal de Modelo de Placa (Criar ou Editar) -->
+  <div id="modal-model" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-model-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-model-title">Cadastrar Novo Modelo de Placa</h3>
+        <button class="modal-close" data-close-modal="modal-model" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-model">
+        <input type="hidden" id="model-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="model-name" class="form-label">Nome do Modelo *</label>
+            <input type="text" id="model-name" class="form-control" placeholder="Ex: Placa NFC Slim Metalizada" required>
+          </div>
+          <div class="form-group">
+            <label for="model-price" class="form-label">Preço Sugerido de Venda (R$) *</label>
+            <input type="number" id="model-price" class="form-control" step="0.01" min="0" placeholder="99.90" required>
+          </div>
+          <div class="form-group">
+            <label for="model-desc" class="form-label">Descrição e Detalhes do Produto</label>
+            <textarea id="model-desc" class="form-control" rows="3" placeholder="Descreva material, dimensões, tipo de corte..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-model">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Modelo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Modal de Sócio / Vendedor -->
+  <div id="modal-seller" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-seller-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-seller-title">Cadastrar Sócio / Vendedor</h3>
+        <button class="modal-close" data-close-modal="modal-seller" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-seller">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="seller-name" class="form-label">Nome Completo *</label>
+            <input type="text" id="seller-name" class="form-control" placeholder="Nome da pessoa" required>
+          </div>
+          <div class="form-group">
+            <label for="seller-role" class="form-label">Função / Cargo</label>
+            <input type="text" id="seller-role" class="form-control" placeholder="Ex: Sócio, Vendedor, Comercial" value="Sócio">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-seller">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Pessoa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Container de Toasts de Notificação -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Scripts da Aplicação -->
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

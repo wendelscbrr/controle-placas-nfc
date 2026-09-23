@@ -1,0 +1,223 @@
+// src/routes/sales.js
+// Rotas da API para gerenciamento das Vendas
+
+const express = require('express');
+const router = express.Router();
+const db = require('../database/db');
+
+// GET /api/sales - Listar vendas com detalhes do modelo e vendedor
+router.get('/', (req, res) => {
+  try {
+    const { startDate, endDate, seller_id, model_id, search } = req.query;
+
+    let query = `
+      SELECT 
+        s.id,
+        s.date,
+        s.customer_name,
+        s.model_id,
+        m.name AS model_name,
+        s.quantity,
+        s.unit_price,
+        s.total_price,
+        s.seller_id,
+        sel.name AS seller_name,
+        s.payment_method,
+        s.notes,
+        s.created_at
+      FROM sales s
+      LEFT JOIN models m ON s.model_id = m.id
+      LEFT JOIN sellers sel ON s.seller_id = sel.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+
+    if (startDate) {
+      query += ' AND s.date >= ?';
+      params.push(startDate);
+    }
+    if (endDate) {
+      query += ' AND s.date <= ?';
+      params.push(endDate);
+    }
+    if (seller_id && seller_id !== 'all') {
+      query += ' AND s.seller_id = ?';
+      params.push(seller_id);
+    }
+    if (model_id && model_id !== 'all') {
+      query += ' AND s.model_id = ?';
+      params.push(model_id);
+    }
+    if (search && search.trim() !== '') {
+      query += ' AND (s.customer_name LIKE ? OR s.notes LIKE ?)';
+      params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+    }
+
+    query += ' ORDER BY s.date DESC, s.id DESC';
+
+    const sales = db.prepare(query).all(...params);
+    res.json(sales);
+  } catch (error) {
+    console.error('Erro ao buscar vendas:', error);
+    res.status(500).json({ error: 'Erro ao listar vendas' });
+  }
+});
+
+// POST /api/sales - Registrar nova venda
+router.post('/', (req, res) => {
+  try {
+    const { 
+      date, 
+      customer_name, 
+      model_id, 
+      quantity, 
+      unit_price, 
+      seller_id, 
+      payment_method, 
+      notes 
+    } = req.body;
+
+    if (!customer_name || customer_name.trim() === '') {
+      return res.status(400).json({ error: 'Nome do cliente é obrigatório.' });
+    }
+    if (!model_id) {
+      return res.status(400).json({ error: 'Selecione o modelo da placa.' });
+    }
+    if (!seller_id) {
+      return res.status(400).json({ error: 'Selecione o sócio/vendedor responsável.' });
+    }
+
+    const qty = parseInt(quantity, 10);
+    const price = parseFloat(unit_price);
+
+    if (isNaN(qty) || qty <= 0) {
+      return res.status(400).json({ error: 'Quantidade de placas deve ser pelo menos 1.' });
+    }
+    if (isNaN(price) || price < 0) {
+      return res.status(400).json({ error: 'Valor unitário inválido.' });
+    }
+
+    // Calcula valor total automaticamente
+    const totalPrice = Number((qty * price).toFixed(2));
+    const saleDate = date || new Date().toISOString().split('T')[0];
+
+    const stmt = db.prepare(`
+      INSERT INTO sales (
+        date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      saleDate,
+      customer_name.trim(),
+      parseInt(model_id, 10),
+      qty,
+      price,
+      totalPrice,
+      parseInt(seller_id, 10),
+      payment_method || 'PIX',
+      notes ? notes.trim() : ''
+    );
+
+    // Retorna a venda completa já com os joins
+    const newSale = db.prepare(`
+      SELECT 
+        s.*,
+        m.name AS model_name,
+        sel.name AS seller_name
+      FROM sales s
+      LEFT JOIN models m ON s.model_id = m.id
+      LEFT JOIN sellers sel ON s.seller_id = sel.id
+      WHERE s.id = ?
+    `).get(result.lastInsertRowid);
+
+    res.status(201).json(newSale);
+  } catch (error) {
+    console.error('Erro ao cadastrar venda:', error);
+    res.status(500).json({ error: 'Erro ao registrar venda' });
+  }
+});
+
+// PUT /api/sales/:id - Editar venda
+router.put('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      date, 
+      customer_name, 
+      model_id, 
+      quantity, 
+      unit_price, 
+      seller_id, 
+      payment_method, 
+      notes 
+    } = req.body;
+
+    const existing = db.prepare('SELECT * FROM sales WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Venda não encontrada.' });
+    }
+
+    const qty = quantity !== undefined ? parseInt(quantity, 10) : existing.quantity;
+    const price = unit_price !== undefined ? parseFloat(unit_price) : existing.unit_price;
+    const totalPrice = Number((qty * price).toFixed(2));
+
+    const stmt = db.prepare(`
+      UPDATE sales SET
+        date = ?,
+        customer_name = ?,
+        model_id = ?,
+        quantity = ?,
+        unit_price = ?,
+        total_price = ?,
+        seller_id = ?,
+        payment_method = ?,
+        notes = ?
+      WHERE id = ?
+    `);
+
+    stmt.run(
+      date || existing.date,
+      customer_name !== undefined ? customer_name.trim() : existing.customer_name,
+      model_id !== undefined ? parseInt(model_id, 10) : existing.model_id,
+      qty,
+      price,
+      totalPrice,
+      seller_id !== undefined ? parseInt(seller_id, 10) : existing.seller_id,
+      payment_method !== undefined ? payment_method : existing.payment_method,
+      notes !== undefined ? notes.trim() : existing.notes,
+      id
+    );
+
+    const updatedSale = db.prepare(`
+      SELECT 
+        s.*,
+        m.name AS model_name,
+        sel.name AS seller_name
+      FROM sales s
+      LEFT JOIN models m ON s.model_id = m.id
+      LEFT JOIN sellers sel ON s.seller_id = sel.id
+      WHERE s.id = ?
+    `).get(id);
+
+    res.json(updatedSale);
+  } catch (error) {
+    console.error('Erro ao atualizar venda:', error);
+    res.status(500).json({ error: 'Erro ao atualizar registro de venda' });
+  }
+});
+
+// DELETE /api/sales/:id - Excluir venda
+router.delete('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    db.prepare('DELETE FROM sales WHERE id = ?').run(id);
+    res.json({ message: 'Venda excluída com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao excluir venda:', error);
+    res.status(500).json({ error: 'Erro ao remover venda' });
+  }
+});
+
+module.exports = router;
