@@ -135,8 +135,10 @@ router.post('/', (req, res) => {
     const today = getTodayDateStr();
     const saleDate = date || today;
 
-    // Regra de negócio solicitada: se data for futura, status é 'pendente'; senão 'pago'
-    const status = saleDate > today ? 'pendente' : 'pago';
+    // Regra de negócio: se status for informado explicitamente e não for 'auto', respeita o status; senão data futura = 'pendente', data atual/passada = 'pago'
+    const status = (req.body.status && req.body.status !== 'auto')
+      ? req.body.status
+      : (saleDate > today ? 'pendente' : 'pago');
 
     const stmt = db.prepare(`
       INSERT INTO sales (
@@ -209,9 +211,11 @@ router.put('/:id', (req, res) => {
     const targetDate = date || existing.date;
     const today = getTodayDateStr();
 
-    // Se o status não for informado explicitamente, recalcula com base na data
-    let statusToSave = customStatus || existing.status || 'pago';
-    if (!customStatus && date) {
+    // Regra de negócio: se status for informado explicitamente e não for 'auto', respeita o status; senão recalcula pela data
+    let statusToSave = existing.status || 'pago';
+    if (customStatus && customStatus !== 'auto') {
+      statusToSave = customStatus;
+    } else {
       statusToSave = targetDate > today ? 'pendente' : 'pago';
     }
 

@@ -513,6 +513,7 @@
         <button class="modal-close" data-close-modal="modal-sale" aria-label="Fechar">&times;</button>
       </div>
       <form id="form-sale">
+        <input type="hidden" id="sale-id" value="">
         <div class="modal-body">
           <div class="form-row">
             <div class="form-group">
@@ -575,14 +576,23 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="sale-notes" class="form-label">Observações (opcional)</label>
-              <input type="text" id="sale-notes" class="form-control" placeholder="Ex: link do cardápio, cores...">
+              <label for="sale-status" class="form-label">Status da Venda</label>
+              <select id="sale-status" class="form-control">
+                <option value="auto">Automático (Pela Data)</option>
+                <option value="pago">✓ Pago</option>
+                <option value="pendente">⏳ Pendente</option>
+              </select>
             </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label for="sale-notes" class="form-label">Observações (opcional)</label>
+            <input type="text" id="sale-notes" class="form-control" placeholder="Ex: link do cardápio, cores...">
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-close-modal="modal-sale">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar Venda</button>
+          <button type="submit" id="btn-submit-sale" class="btn btn-primary">Salvar Venda</button>
         </div>
       </form>
     </div>

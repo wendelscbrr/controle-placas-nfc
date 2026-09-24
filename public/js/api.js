@@ -47,6 +47,17 @@ const API = {
     return result;
   },
 
+  async updateSale(id, data) {
+    const res = await this.request(`/api/sales/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erro ao atualizar venda');
+    return result;
+  },
+
   async deleteSale(id) {
     const res = await this.request(`/api/sales/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir venda');

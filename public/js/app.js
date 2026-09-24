@@ -81,12 +81,36 @@ function openModal(modalId) {
   }
 }
 
+function resetSaleModalForNew() {
+  const titleEl = document.getElementById('modal-sale-title');
+  if (titleEl) titleEl.textContent = 'Registrar Nova Venda';
+  const idInput = document.getElementById('sale-id');
+  if (idInput) idInput.value = '';
+  const form = document.getElementById('form-sale');
+  if (form) form.reset();
+  const dateInput = document.getElementById('sale-date');
+  if (dateInput) {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    dateInput.value = today;
+  }
+  const statusSelect = document.getElementById('sale-status');
+  if (statusSelect) statusSelect.value = 'auto';
+  const btnSubmit = document.getElementById('btn-submit-sale');
+  if (btnSubmit) btnSubmit.textContent = 'Salvar Venda';
+  const saleCalcHint = document.getElementById('sale-calc-total');
+  if (saleCalcHint) saleCalcHint.textContent = 'Total Calculado: R$ 0,00';
+  updateSaleDateStatusHint();
+}
+
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
     modal.classList.remove('open');
     const form = modal.querySelector('form');
     if (form) form.reset();
+    if (modalId === 'modal-sale') {
+      resetSaleModalForNew();
+    }
   }
 }
 
@@ -109,9 +133,18 @@ function setupModalListeners() {
   });
 
   // Gatilhos de abertura
-  document.getElementById('btn-open-modal-sale')?.addEventListener('click', () => openModal('modal-sale'));
-  document.getElementById('btn-new-sale-dash')?.addEventListener('click', () => openModal('modal-sale'));
-  document.getElementById('btn-quick-sale-mobile')?.addEventListener('click', () => openModal('modal-sale'));
+  document.getElementById('btn-open-modal-sale')?.addEventListener('click', () => {
+    resetSaleModalForNew();
+    openModal('modal-sale');
+  });
+  document.getElementById('btn-new-sale-dash')?.addEventListener('click', () => {
+    resetSaleModalForNew();
+    openModal('modal-sale');
+  });
+  document.getElementById('btn-quick-sale-mobile')?.addEventListener('click', () => {
+    resetSaleModalForNew();
+    openModal('modal-sale');
+  });
   document.getElementById('btn-open-modal-expense')?.addEventListener('click', () => openModal('modal-expense'));
   document.getElementById('btn-open-modal-model')?.addEventListener('click', () => {
     document.getElementById('modal-model-title').textContent = 'Cadastrar Novo Modelo de Placa';
@@ -526,8 +559,11 @@ async function loadSales() {
           <td><span class="badge badge-indigo">${sale.seller_name || 'Não informado'}</span></td>
           <td><span class="badge badge-amber">${sale.payment_method}</span></td>
           <td>${statusBadge}</td>
-          <td style="text-align: right;">
-            <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteSaleItem(${sale.id})" title="Excluir Venda">🗑️</button>
+          <td style="text-align: right; white-space: nowrap;">
+            <div style="display: inline-flex; gap: 0.35rem; justify-content: flex-end;">
+              <button class="btn btn-secondary btn-sm btn-icon" onclick="editSaleItem(${sale.id})" title="Editar Venda">✏️</button>
+              <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteSaleItem(${sale.id})" title="Excluir Venda">🗑️</button>
+            </div>
           </td>
         </tr>
       `;
@@ -538,12 +574,13 @@ async function loadSales() {
   }
 }
 
-// Registrar nova venda
+// Registrar ou editar venda
 function setupSaleForm() {
   const form = document.getElementById('form-sale');
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    const id = document.getElementById('sale-id')?.value;
     const data = {
       date: document.getElementById('sale-date').value,
       customer_name: document.getElementById('sale-customer').value,
@@ -555,11 +592,22 @@ function setupSaleForm() {
       notes: document.getElementById('sale-notes').value
     };
 
+    const statusVal = document.getElementById('sale-status')?.value;
+    if (statusVal) {
+      data.status = statusVal;
+    }
+
     try {
-      const res = await API.createSale(data);
-      closeModal('modal-sale');
-      const isPending = res.status === 'pendente';
-      showToast(isPending ? '⏳ Venda futura registrada como PENDENTE!' : '🎉 Venda registrada com sucesso como PAGA!');
+      if (id) {
+        await API.updateSale(id, data);
+        closeModal('modal-sale');
+        showToast('✓ Venda atualizada com sucesso!');
+      } else {
+        const res = await API.createSale(data);
+        closeModal('modal-sale');
+        const isPending = res.status === 'pendente';
+        showToast(isPending ? '⏳ Venda futura registrada como PENDENTE!' : '🎉 Venda registrada com sucesso como PAGA!');
+      }
       loadSales();
       if (state.currentTab === 'dashboard') loadDashboard();
     } catch (error) {
@@ -572,11 +620,84 @@ function setupSaleForm() {
   saleDateInput?.addEventListener('input', updateSaleDateStatusHint);
   saleDateInput?.addEventListener('change', updateSaleDateStatusHint);
 
+  // Reage à escolha manual de status
+  const saleStatusInput = document.getElementById('sale-status');
+  saleStatusInput?.addEventListener('change', () => {
+    if (saleStatusInput.value !== 'auto') {
+      const hintEl = document.getElementById('sale-status-hint');
+      if (hintEl) {
+        if (saleStatusInput.value === 'pendente') {
+          hintEl.className = 'sale-status-hint is-pending';
+          hintEl.innerHTML = `<span>⏳</span><span>Status definido manualmente como <strong style="color: #fbbf24;">PENDENTE</strong>.</span>`;
+        } else {
+          hintEl.className = 'sale-status-hint is-paid';
+          hintEl.innerHTML = `<span>✓</span><span>Status definido manualmente como <strong style="color: #34d399;">PAGO</strong>.</span>`;
+        }
+      }
+    } else {
+      updateSaleDateStatusHint();
+    }
+  });
+
   // Filtros em tempo real na listagem de vendas
   document.getElementById('filter-sales-search')?.addEventListener('input', loadSales);
   document.getElementById('filter-sales-seller')?.addEventListener('change', loadSales);
   document.getElementById('filter-sales-status')?.addEventListener('change', loadSales);
 }
+
+// Editar venda existente
+window.editSaleItem = async function(id) {
+  let sale = state.sales?.find(s => s.id === id);
+  if (!sale) {
+    try {
+      const sales = await API.getSales();
+      sale = sales.find(s => s.id === id);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  if (!sale) {
+    showToast('Venda não encontrada.', 'error');
+    return;
+  }
+
+  // Garante que os selects de modelos e vendedores estão carregados
+  await syncModelsAndSellers();
+
+  const titleEl = document.getElementById('modal-sale-title');
+  if (titleEl) titleEl.textContent = `Editar Venda #${sale.id} - ${sale.customer_name}`;
+
+  document.getElementById('sale-id').value = sale.id;
+  document.getElementById('sale-date').value = sale.date;
+  document.getElementById('sale-customer').value = sale.customer_name;
+  document.getElementById('sale-model').value = sale.model_id;
+  document.getElementById('sale-seller').value = sale.seller_id;
+  document.getElementById('sale-quantity').value = sale.quantity;
+  document.getElementById('sale-price').value = Number(sale.unit_price).toFixed(2);
+  document.getElementById('sale-payment').value = sale.payment_method || 'PIX';
+  document.getElementById('sale-notes').value = sale.notes || '';
+
+  const statusSelect = document.getElementById('sale-status');
+  if (statusSelect) {
+    statusSelect.value = sale.status || 'pago';
+  }
+
+  const btnSubmit = document.getElementById('btn-submit-sale');
+  if (btnSubmit) btnSubmit.textContent = 'Salvar Alterações';
+
+  // Atualiza cálculo total do modal
+  const qty = parseFloat(sale.quantity) || 0;
+  const price = parseFloat(sale.unit_price) || 0;
+  const total = qty * price;
+  const saleCalcHint = document.getElementById('sale-calc-total');
+  if (saleCalcHint) {
+    saleCalcHint.textContent = `Total Calculado: ${formatBRL(total)} (${qty} placa${qty > 1 ? 's' : ''})`;
+  }
+
+  updateSaleDateStatusHint();
+  openModal('modal-sale');
+};
 
 // Excluir venda
 window.deleteSaleItem = async function(id) {
