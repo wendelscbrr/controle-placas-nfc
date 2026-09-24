@@ -1,9 +1,7 @@
-// src/routes/expenses.js
-// Rotas da API para gerenciamento de Gastos e Materiais
-
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
+const { syncToCloud } = require('../database/cloud');
 
 // GET /api/expenses - Listar gastos com filtros opcionais
 router.get('/', (req, res) => {
@@ -138,6 +136,12 @@ router.post('/', (req, res) => {
       notes ? notes.trim() : ''
     );
 
+    // Replicar no SQLite Cloud
+    syncToCloud(`
+      INSERT INTO expenses (id, date, item_name, category, quantity, unit_cost, total_cost, supplier, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, result.lastInsertRowid, purchaseDate, item_name.trim(), categoryName, qty, unitPrice, totalCost, supplier ? supplier.trim() : '', notes ? notes.trim() : '');
+
     const newExpense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(newExpense);
   } catch (error) {
@@ -179,6 +183,13 @@ router.put('/:id', (req, res) => {
       id
     );
 
+    // Replicar atualização no SQLite Cloud
+    syncToCloud(`
+      UPDATE expenses 
+      SET date = ?, item_name = ?, category = ?, quantity = ?, unit_cost = ?, total_cost = ?, supplier = ?, notes = ?
+      WHERE id = ?
+    `, date || existing.date, item_name !== undefined ? item_name.trim() : existing.item_name, category !== undefined ? category.trim() : existing.category, updatedQty, updatedUnitCost, updatedTotalCost, supplier !== undefined ? supplier.trim() : existing.supplier, notes !== undefined ? notes.trim() : existing.notes, id);
+
     const updated = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
     res.json(updated);
   } catch (error) {
@@ -192,6 +203,10 @@ router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
     db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
+
+    // Replicar exclusão no SQLite Cloud
+    syncToCloud('DELETE FROM expenses WHERE id = ?', id);
+
     res.json({ message: 'Registro de gasto excluído com sucesso.' });
   } catch (error) {
     console.error('Erro ao excluir gasto:', error);

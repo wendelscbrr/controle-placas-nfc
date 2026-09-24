@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestão NFC Pro | Sistema de Controle de Placas NFC</title>
-  <meta name="description" content="Sistema profissional de gestão financeira, controle de materiais, vendas e participação de sócios para placas NFC personalizadas.">
+  <meta name="description"
+    content="Sistema profissional de gestão financeira, controle de materiais, vendas e participação de sócios para placas NFC personalizadas.">
   <link rel="stylesheet" href="/css/style.css">
 </head>
+
 <body>
   <div class="app-container">
-    
+
     <!-- HEADER MOBILE -->
     <header class="app-header" role="banner">
       <div class="brand">
@@ -67,7 +70,8 @@
         </button>
       </nav>
 
-      <div class="sidebar-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--text-dim);">
+      <div class="sidebar-footer"
+        style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--text-dim);">
         <p>Sistema Ativo v1.0</p>
         <p>Base: SQLite Nativo</p>
       </div>
@@ -225,7 +229,8 @@
         <!-- Distribuição por Modelo de Placa -->
         <div class="card" style="margin-top: 1.25rem;">
           <h3 class="chart-title" style="margin-bottom: 1rem;">Vendas por Modelo de Placa</h3>
-          <div id="models-distribution-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+          <div id="models-distribution-list"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
             <!-- Preenchido dinamicamente -->
           </div>
         </div>
@@ -250,7 +255,8 @@
           <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
             <div>
               <label for="filter-sales-search" class="form-label">Buscar por Cliente</label>
-              <input type="text" id="filter-sales-search" class="form-control" placeholder="Digite o nome do cliente...">
+              <input type="text" id="filter-sales-search" class="form-control"
+                placeholder="Digite o nome do cliente...">
             </div>
             <div>
               <label for="filter-sales-seller" class="form-label">Filtrar por Vendedor</label>
@@ -308,7 +314,8 @@
         </div>
 
         <!-- Mini Resumo de Gastos -->
-        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.25rem;">
+        <div class="kpi-grid"
+          style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.25rem;">
           <div class="card">
             <div class="kpi-title">Total Gasto em Materiais</div>
             <div id="expense-summary-total" class="kpi-value" style="color: var(--accent-rose);">R$ 0,00</div>
@@ -368,7 +375,8 @@
           </button>
         </div>
 
-        <div id="models-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+        <div id="models-cards-grid"
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
           <!-- Cards de modelos renderizados dinamicamente -->
         </div>
       </section>
@@ -387,7 +395,8 @@
           </button>
         </div>
 
-        <div id="sellers-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem;">
+        <div id="sellers-cards-grid"
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem;">
           <!-- Cards de sócios renderizados dinamicamente -->
         </div>
       </section>
@@ -402,10 +411,12 @@
             <p class="section-subtitle">Acompanhe o crescimento e evolução das vendas por períodos.</p>
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-            <a href="/api/reports/export/csv" class="btn btn-secondary btn-sm" download title="Exportar todas as vendas para Excel">
+            <a href="/api/reports/export/csv" class="btn btn-secondary btn-sm" download
+              title="Exportar todas as vendas para Excel">
               📊 Exportar Vendas (Excel / CSV)
             </a>
-            <a href="/api/reports/export/backup" class="btn btn-secondary btn-sm" download title="Baixar cópia de segurança de todos os dados">
+            <a href="/api/reports/export/backup" class="btn btn-secondary btn-sm" download
+              title="Baixar cópia de segurança de todos os dados">
               💾 Baixar Backup Geral (JSON)
             </a>
           </div>
@@ -445,14 +456,16 @@
         <div class="section-header">
           <div>
             <h2 id="title-anotacoes" class="section-title">Bloco de Anotações</h2>
-            <p class="section-subtitle">Espaço para lembretes em várias linhas, ideias, listas de tarefas e avisos entre os sócios.</p>
+            <p class="section-subtitle">Espaço para lembretes em várias linhas, ideias, listas de tarefas e avisos entre
+              os sócios.</p>
           </div>
           <button id="btn-open-modal-note" class="btn btn-primary">
             + Nova Anotação
           </button>
         </div>
 
-        <div id="notes-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+        <div id="notes-cards-grid"
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
           <!-- Cards de anotações renderizados dinamicamente -->
         </div>
       </section>
@@ -515,7 +528,8 @@
           <!-- Dica visual do Status que será atribuído -->
           <div id="sale-status-hint" class="sale-status-hint is-paid">
             <span>✓</span>
-            <span id="sale-status-hint-text">Data atual/passada: esta venda será registrada como <strong>PAGO</strong>.</span>
+            <span id="sale-status-hint-text">Data atual/passada: esta venda será registrada como
+              <strong>PAGO</strong>.</span>
           </div>
 
           <div class="form-row">
@@ -613,7 +627,8 @@
             </div>
             <div class="form-group">
               <label for="expense-unit-cost" class="form-label">Valor Unitário (R$) *</label>
-              <input type="number" id="expense-unit-cost" class="form-control" step="0.01" min="0" placeholder="0.00" required>
+              <input type="number" id="expense-unit-cost" class="form-control" step="0.01" min="0" placeholder="0.00"
+                required>
             </div>
           </div>
 
@@ -628,7 +643,8 @@
             </div>
             <div class="form-group">
               <label for="expense-notes" class="form-label">Observações</label>
-              <input type="text" id="expense-notes" class="form-control" placeholder="Ex: link do pedido, nota fiscal...">
+              <input type="text" id="expense-notes" class="form-control"
+                placeholder="Ex: link do pedido, nota fiscal...">
             </div>
           </div>
         </div>
@@ -652,7 +668,8 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="model-name" class="form-label">Nome do Modelo *</label>
-            <input type="text" id="model-name" class="form-control" placeholder="Ex: Placa NFC Slim Metalizada" required>
+            <input type="text" id="model-name" class="form-control" placeholder="Ex: Placa NFC Slim Metalizada"
+              required>
           </div>
           <div class="form-group">
             <label for="model-price" class="form-label">Preço Sugerido de Venda (R$) *</label>
@@ -660,7 +677,8 @@
           </div>
           <div class="form-group">
             <label for="model-desc" class="form-label">Descrição e Detalhes do Produto</label>
-            <textarea id="model-desc" class="form-control" rows="3" placeholder="Descreva material, dimensões, tipo de corte..."></textarea>
+            <textarea id="model-desc" class="form-control" rows="3"
+              placeholder="Descreva material, dimensões, tipo de corte..."></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -686,7 +704,8 @@
           </div>
           <div class="form-group">
             <label for="seller-role" class="form-label">Função / Cargo</label>
-            <input type="text" id="seller-role" class="form-control" placeholder="Ex: Sócio, Vendedor, Comercial" value="Sócio">
+            <input type="text" id="seller-role" class="form-control" placeholder="Ex: Sócio, Vendedor, Comercial"
+              value="Sócio">
           </div>
         </div>
         <div class="modal-footer">
@@ -721,14 +740,9 @@
           </div>
           <div class="form-group">
             <label for="note-content" class="form-label">Conteúdo da Anotação (várias linhas) *</label>
-            <textarea 
-              id="note-content" 
-              class="form-control" 
-              rows="8" 
+            <textarea id="note-content" class="form-control" rows="8"
               placeholder="Digite suas anotações aqui em várias linhas...&#10;- Item 1&#10;- Item 2&#10;- Fornecedor X&#10;- Avisar cliente Y"
-              style="font-family: var(--font-main); line-height: 1.6; resize: vertical;"
-              required
-            ></textarea>
+              style="font-family: var(--font-main); line-height: 1.6; resize: vertical;" required></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -748,4 +762,5 @@
   <script src="/js/api.js"></script>
   <script src="/js/app.js"></script>
 </body>
+
 </html>

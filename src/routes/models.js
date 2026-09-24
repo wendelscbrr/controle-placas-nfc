@@ -1,9 +1,7 @@
-// src/routes/models.js
-// Rotas da API para gerenciamento dos Modelos de Placas NFC
-
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
+const { syncToCloud } = require('../database/cloud');
 
 // GET /api/models - Listar todos os modelos de placas
 router.get('/', (req, res) => {
@@ -40,8 +38,14 @@ router.post('/', (req, res) => {
     `);
 
     const result = stmt.run(name.trim(), description ? description.trim() : '', price);
-    const newModel = db.prepare('SELECT * FROM models WHERE id = ?').get(result.lastInsertRowid);
 
+    // Replicar no SQLite Cloud
+    syncToCloud(`
+      INSERT INTO models (id, name, description, base_price, is_active)
+      VALUES (?, ?, ?, ?, 1)
+    `, result.lastInsertRowid, name.trim(), description ? description.trim() : '', price);
+
+    const newModel = db.prepare('SELECT * FROM models WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(newModel);
   } catch (error) {
     console.error('Erro ao cadastrar modelo:', error);
@@ -72,8 +76,15 @@ router.put('/:id', (req, res) => {
     `);
 
     stmt.run(updatedName, updatedDesc, updatedPrice, updatedActive, id);
-    const updatedModel = db.prepare('SELECT * FROM models WHERE id = ?').get(id);
 
+    // Replicar no SQLite Cloud
+    syncToCloud(`
+      UPDATE models 
+      SET name = ?, description = ?, base_price = ?, is_active = ?
+      WHERE id = ?
+    `, updatedName, updatedDesc, updatedPrice, updatedActive, id);
+
+    const updatedModel = db.prepare('SELECT * FROM models WHERE id = ?').get(id);
     res.json(updatedModel);
   } catch (error) {
     console.error('Erro ao atualizar modelo:', error);
@@ -92,10 +103,12 @@ router.delete('/:id', (req, res) => {
     if (salesCount.count > 0) {
       // Se houver histórico de vendas, apenas desativamos (Soft Delete) para manter a integridade dos relatórios passados
       db.prepare('UPDATE models SET is_active = 0 WHERE id = ?').run(id);
+      syncToCloud('UPDATE models SET is_active = 0 WHERE id = ?', id);
       return res.json({ message: 'Modelo desativado com sucesso para preservar o histórico de vendas.' });
     } else {
       // Se nunca foi vendido, pode ser removido fisicamente
       db.prepare('DELETE FROM models WHERE id = ?').run(id);
+      syncToCloud('DELETE FROM models WHERE id = ?', id);
       return res.json({ message: 'Modelo excluído com sucesso.' });
     }
   } catch (error) {

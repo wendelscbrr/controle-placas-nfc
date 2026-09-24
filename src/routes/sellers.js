@@ -1,9 +1,7 @@
-// src/routes/sellers.js
-// Rotas da API para gerenciamento dos Sócios e Vendedores
-
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
+const { syncToCloud } = require('../database/cloud');
 
 // GET /api/sellers - Listar sócios/vendedores com métricas individuais de vendas
 router.get('/', (req, res) => {
@@ -66,8 +64,14 @@ router.post('/', (req, res) => {
     `);
 
     const result = stmt.run(name.trim(), role ? role.trim() : 'Vendedor');
-    const newSeller = db.prepare('SELECT * FROM sellers WHERE id = ?').get(result.lastInsertRowid);
 
+    // Replicar no SQLite Cloud
+    syncToCloud(`
+      INSERT INTO sellers (id, name, role, is_active)
+      VALUES (?, ?, ?, 1)
+    `, result.lastInsertRowid, name.trim(), role ? role.trim() : 'Vendedor');
+
+    const newSeller = db.prepare('SELECT * FROM sellers WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(newSeller);
   } catch (error) {
     console.error('Erro ao cadastrar vendedor:', error);
@@ -97,8 +101,15 @@ router.put('/:id', (req, res) => {
     `);
 
     stmt.run(updatedName, updatedRole, updatedActive, id);
-    const updatedSeller = db.prepare('SELECT * FROM sellers WHERE id = ?').get(id);
 
+    // Replicar no SQLite Cloud
+    syncToCloud(`
+      UPDATE sellers 
+      SET name = ?, role = ?, is_active = ?
+      WHERE id = ?
+    `, updatedName, updatedRole, updatedActive, id);
+
+    const updatedSeller = db.prepare('SELECT * FROM sellers WHERE id = ?').get(id);
     res.json(updatedSeller);
   } catch (error) {
     console.error('Erro ao atualizar sócio/vendedor:', error);
@@ -116,9 +127,11 @@ router.delete('/:id', (req, res) => {
     if (salesCount.count > 0) {
       // Se já houver vendas atribuídas, apenas desativamos para manter a consistência financeira
       db.prepare('UPDATE sellers SET is_active = 0 WHERE id = ?').run(id);
+      syncToCloud('UPDATE sellers SET is_active = 0 WHERE id = ?', id);
       return res.json({ message: 'Vendedor desativado com sucesso para manter o histórico de vendas.' });
     } else {
       db.prepare('DELETE FROM sellers WHERE id = ?').run(id);
+      syncToCloud('DELETE FROM sellers WHERE id = ?', id);
       return res.json({ message: 'Vendedor removido com sucesso.' });
     }
   } catch (error) {

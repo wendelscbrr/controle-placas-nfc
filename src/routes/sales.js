@@ -1,9 +1,7 @@
-// src/routes/sales.js
-// Rotas da API para gerenciamento das Vendas
-
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
+const { syncToCloud } = require('../database/cloud');
 
 /**
  * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
@@ -159,6 +157,12 @@ router.post('/', (req, res) => {
       notes ? notes.trim() : ''
     );
 
+    // Replicar no SQLite Cloud em tempo real
+    syncToCloud(`
+      INSERT INTO sales (id, date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, status, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, result.lastInsertRowid, saleDate, customer_name.trim(), parseInt(model_id, 10), qty, price, totalPrice, parseInt(seller_id, 10), payment_method || 'PIX', status, notes ? notes.trim() : '');
+
     // Retorna a venda completa já com os joins
     const newSale = db.prepare(`
       SELECT 
@@ -240,6 +244,14 @@ router.put('/:id', (req, res) => {
       id
     );
 
+    // Replicar atualização no SQLite Cloud
+    syncToCloud(`
+      UPDATE sales SET
+        date = ?, customer_name = ?, model_id = ?, quantity = ?, unit_price = ?,
+        total_price = ?, seller_id = ?, payment_method = ?, status = ?, notes = ?
+      WHERE id = ?
+    `, targetDate, customer_name !== undefined ? customer_name.trim() : existing.customer_name, model_id !== undefined ? parseInt(model_id, 10) : existing.model_id, qty, price, totalPrice, seller_id !== undefined ? parseInt(seller_id, 10) : existing.seller_id, payment_method !== undefined ? payment_method : existing.payment_method, statusToSave, notes !== undefined ? notes.trim() : existing.notes, id);
+
     const updatedSale = db.prepare(`
       SELECT 
         s.*,
@@ -263,6 +275,10 @@ router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
     db.prepare('DELETE FROM sales WHERE id = ?').run(id);
+
+    // Replicar exclusão no SQLite Cloud
+    syncToCloud('DELETE FROM sales WHERE id = ?', id);
+
     res.json({ message: 'Venda excluída com sucesso.' });
   } catch (error) {
     console.error('Erro ao excluir venda:', error);
