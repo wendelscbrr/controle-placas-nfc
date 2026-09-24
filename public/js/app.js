@@ -973,82 +973,6 @@ window.deleteNoteItem = async function(id) {
 };
 
 // =============================================================================
-// MÓDULO: AUTENTICAÇÃO E TELA DE BLOQUEIO (PIN / SENHA)
-// =============================================================================
-function setupAuth() {
-  const overlay = document.getElementById('auth-overlay');
-  const form = document.getElementById('form-auth');
-  const passwordInput = document.getElementById('auth-password');
-  const errorMsg = document.getElementById('auth-error-msg');
-  const btnSubmit = document.getElementById('btn-submit-auth');
-
-  function showLock() {
-    overlay.classList.remove('hidden');
-    passwordInput.value = '';
-    errorMsg.style.display = 'none';
-    setTimeout(() => passwordInput.focus(), 150);
-  }
-
-  function hideLock() {
-    overlay.classList.add('hidden');
-    errorMsg.style.display = 'none';
-  }
-
-  // Se a API disparar auth:required (401), tranca a tela
-  window.addEventListener('auth:required', () => {
-    showLock();
-    showToast('Sessão bloqueada. Digite a senha para continuar.', 'error');
-  });
-
-  // Botões de Bloqueio Manual (Header e Sidebar)
-  document.getElementById('btn-lock-mobile')?.addEventListener('click', () => {
-    API.logout();
-    showLock();
-    showToast('Painel bloqueado com sucesso.');
-  });
-
-  document.getElementById('btn-lock-desktop')?.addEventListener('click', () => {
-    API.logout();
-    showLock();
-    showToast('Painel bloqueado com sucesso.');
-  });
-
-  // Formulário de Desbloqueio
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorMsg.style.display = 'none';
-    btnSubmit.disabled = true;
-    btnSubmit.textContent = 'Verificando...';
-
-    const pwd = passwordInput.value;
-
-    try {
-      await API.verifyPassword(pwd);
-      hideLock();
-      showToast('⚡ Painel desbloqueado com sucesso!');
-      await syncModelsAndSellers();
-      loadDashboard();
-    } catch (err) {
-      errorMsg.textContent = err.message || 'Senha incorreta. Tente novamente.';
-      errorMsg.style.display = 'block';
-      passwordInput.select();
-    } finally {
-      btnSubmit.disabled = false;
-      btnSubmit.textContent = '⚡ Desbloquear Painel';
-    }
-  });
-
-  // Checagem inicial
-  if (!API.isAuthenticated()) {
-    showLock();
-    return false;
-  } else {
-    hideLock();
-    return true;
-  }
-}
-
-// =============================================================================
 // INICIALIZAÇÃO DA APLICAÇÃO (DOMContentLoaded)
 // =============================================================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1066,12 +990,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupReportButtons();
   setupNoteForm();
 
-  // Inicializa autenticação com senha 'coxinha'
-  const isAuth = setupAuth();
-
-  // Carrega opções e dados se já estiver autenticado
-  if (isAuth) {
-    await syncModelsAndSellers();
-    loadDashboard();
-  }
+  // Carrega opções e dados diretamente sem bloqueio de senha
+  await syncModelsAndSellers();
+  loadDashboard();
 });

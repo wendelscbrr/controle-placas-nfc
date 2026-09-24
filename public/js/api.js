@@ -1,60 +1,13 @@
 // public/js/api.js
-// Camada de comunicação assíncrona com a API REST (Fetch API) com Autenticação Centralizada
-
-const AUTH_KEY = 'nfc_auth_token';
-
-/**
- * Retorna os headers necessários para a requisição, incluindo o Bearer Token de autenticação
- */
-function getAuthHeaders(extraHeaders = {}) {
-  const token = localStorage.getItem(AUTH_KEY);
-  const headers = { ...extraHeaders };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
+// Camada de comunicação assíncrona com a API REST (Fetch API)
 
 const API = {
   /**
    * Wrapper centralizado para todas as chamadas HTTP.
-   * Injeta o token e detecta se o acesso foi negado (401), acionando o bloqueio de tela.
    */
   async request(url, options = {}) {
-    const headers = getAuthHeaders(options.headers || {});
-    const res = await fetch(url, { ...options, headers });
-
-    if (res.status === 401) {
-      localStorage.removeItem(AUTH_KEY);
-      window.dispatchEvent(new CustomEvent('auth:required'));
-      throw new Error('Acesso bloqueado. Senha necessária.');
-    }
-
+    const res = await fetch(url, options);
     return res;
-  },
-
-  // Autenticação
-  async verifyPassword(password) {
-    const res = await fetch('/api/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Senha incorreta.');
-    
-    // Salva o token localmente para manter a sessão aberta
-    localStorage.setItem(AUTH_KEY, data.token);
-    return data;
-  },
-
-  logout() {
-    localStorage.removeItem(AUTH_KEY);
-    window.dispatchEvent(new CustomEvent('auth:required'));
-  },
-
-  isAuthenticated() {
-    return !!localStorage.getItem(AUTH_KEY);
   },
 
   // 1. Dashboard & Indicadores

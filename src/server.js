@@ -8,8 +8,7 @@ const path = require('node:path');
 // Inicializa o banco de dados
 require('./database/db');
 
-// Importa as rotas modulares e o middleware de autenticação
-const { router: authRouter, requireAuth } = require('./routes/auth');
+// Importa as rotas modulares
 const modelsRouter = require('./routes/models');
 const sellersRouter = require('./routes/sellers');
 const expensesRouter = require('./routes/expenses');
@@ -28,13 +27,7 @@ app.use(express.json());
 // Servir arquivos estáticos do frontend (HTML, CSS, JS, Imagens)
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Rota pública de autenticação
-app.use('/api/auth', authRouter);
-
-// Protege todas as outras rotas da API com verificação de senha
-app.use('/api', requireAuth);
-
-// Rotas da API REST (Agora protegidas)
+// Rotas da API REST
 app.use('/api/models', modelsRouter);
 app.use('/api/sellers', sellersRouter);
 app.use('/api/expenses', expensesRouter);
