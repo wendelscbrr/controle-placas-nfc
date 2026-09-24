@@ -1,5 +1,5 @@
 // src/routes/dashboard.js
-// Rotas da API para alimentar o Dashboard com Indicadores (KPIs) e Gráficos
+// Rotas da API para alimentar o Dashboard com Indicadores (KPIs) e Gráficos via SQLite Cloud
 
 const express = require('express');
 const router = express.Router();
@@ -56,11 +56,11 @@ function resolveDateRange(period, customStart, customEnd) {
 }
 
 // GET /api/dashboard - Indicadores consolidados e dados para gráficos
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // Sincroniza vendas pendentes cuja data já chegou
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-    db.prepare("UPDATE sales SET status = 'pago' WHERE status = 'pendente' AND date <= ?").run(todayStr);
+    await db.run("UPDATE sales SET status = 'pago' WHERE status = 'pendente' AND date <= ?", todayStr);
 
     const { period, startDate: customStart, endDate: customEnd } = req.query;
     const { startDate, endDate, label } = resolveDateRange(period, customStart, customEnd);
@@ -84,136 +84,144 @@ router.get('/', (req, res) => {
       expensesParams.push(endDate);
     }
 
-    // 1. Métricas de Vendas (Total Vendido, Quantidade de Placas, Total de Transações)
-    const salesSummary = db.prepare(`
-      SELECT 
-        COUNT(id) as total_sales_count,
-        COALESCE(SUM(quantity), 0) as total_plaques_sold,
-        COALESCE(SUM(total_price), 0) as total_revenue
-      FROM sales
-      ${salesWhere}
-    `).get(...salesParams);
+    const isYearOrAll = period === 'year' || period === 'all';
+    const dateFormatSql = isYearOrAll ? "strftime('%Y-%m', date)" : 'date';
 
-    const totalRevenue = salesSummary.total_revenue || 0;
-    const plaquesSold = salesSummary.total_plaques_sold || 0;
-    const salesCount = salesSummary.total_sales_count || 0;
+    // Executa as consultas do Dashboard em paralelo para máxima performance
+    const [
+      salesSummary,
+      expensesSummary,
+      bestModel,
+      bestSeller,
+      sellersShare,
+      modelsDistribution,
+      salesTimeline,
+      expensesTimeline
+    ] = await Promise.all([
+      // 1. Resumo de Vendas
+      db.get(`
+        SELECT 
+          COUNT(id) as total_sales_count,
+          COALESCE(SUM(quantity), 0) as total_plaques_sold,
+          COALESCE(SUM(total_price), 0) as total_revenue
+        FROM sales
+        ${salesWhere}
+      `, salesParams),
 
-    // Ticket Médio por Venda e por Unidade de Placa
+      // 2. Resumo de Gastos
+      db.get(`
+        SELECT 
+          COALESCE(SUM(total_cost), 0) as total_expenses,
+          COALESCE(SUM(quantity), 0) as total_materials_bought
+        FROM expenses
+        ${expensesWhere}
+      `, expensesParams),
+
+      // 3. Melhor Modelo
+      db.get(`
+        SELECT 
+          m.name as model_name,
+          SUM(s.quantity) as total_quantity,
+          SUM(s.total_price) as total_amount
+        FROM sales s
+        JOIN models m ON s.model_id = m.id
+        ${salesWhere}
+        GROUP BY s.model_id
+        ORDER BY total_quantity DESC, total_amount DESC
+        LIMIT 1
+      `, salesParams),
+
+      // 4. Melhor Vendedor
+      db.get(`
+        SELECT 
+          sel.name as seller_name,
+          COUNT(s.id) as sales_count,
+          SUM(s.quantity) as plaques_sold,
+          SUM(s.total_price) as total_amount
+        FROM sales s
+        JOIN sellers sel ON s.seller_id = sel.id
+        ${salesWhere}
+        GROUP BY s.seller_id
+        ORDER BY total_amount DESC
+        LIMIT 1
+      `, salesParams),
+
+      // 5. Participação de Cada Sócio / Vendedor
+      db.all(`
+        SELECT 
+          sel.id,
+          sel.name,
+          COUNT(s.id) as sales_count,
+          COALESCE(SUM(s.quantity), 0) as plaques_sold,
+          COALESCE(SUM(s.total_price), 0) as total_amount
+        FROM sellers sel
+        LEFT JOIN sales s ON sel.id = s.seller_id 
+          ${startDate ? 'AND s.date >= ?' : ''} 
+          ${endDate ? 'AND s.date <= ?' : ''}
+        WHERE sel.is_active = 1
+        GROUP BY sel.id
+        ORDER BY total_amount DESC
+      `, salesParams),
+
+      // 6. Distribuição por Modelo
+      db.all(`
+        SELECT 
+          m.name,
+          COALESCE(SUM(s.quantity), 0) as plaques_sold,
+          COALESCE(SUM(s.total_price), 0) as total_revenue
+        FROM models m
+        LEFT JOIN sales s ON m.id = s.model_id
+          ${startDate ? 'AND s.date >= ?' : ''} 
+          ${endDate ? 'AND s.date <= ?' : ''}
+        WHERE m.is_active = 1
+        GROUP BY m.id
+        ORDER BY total_revenue DESC
+      `, salesParams),
+
+      // 7. Timeline de Vendas
+      db.all(`
+        SELECT 
+          ${dateFormatSql} as time_point,
+          COALESCE(SUM(total_price), 0) as sales_total
+        FROM sales
+        ${salesWhere}
+        GROUP BY time_point
+        ORDER BY time_point ASC
+      `, salesParams),
+
+      // 8. Timeline de Gastos
+      db.all(`
+        SELECT 
+          ${dateFormatSql} as time_point,
+          COALESCE(SUM(total_cost), 0) as expenses_total
+        FROM expenses
+        ${expensesWhere}
+        GROUP BY time_point
+        ORDER BY time_point ASC
+      `, expensesParams)
+    ]);
+
+    const totalRevenue = salesSummary ? salesSummary.total_revenue || 0 : 0;
+    const plaquesSold = salesSummary ? salesSummary.total_plaques_sold || 0 : 0;
+    const salesCount = salesSummary ? salesSummary.total_sales_count || 0 : 0;
+    const totalExpenses = expensesSummary ? expensesSummary.total_expenses || 0 : 0;
+
     const averageTicketPerSale = salesCount > 0 ? (totalRevenue / salesCount) : 0;
     const averageTicketPerUnit = plaquesSold > 0 ? (totalRevenue / plaquesSold) : 0;
-
-    // 2. Métricas de Gastos com Materiais
-    const expensesSummary = db.prepare(`
-      SELECT 
-        COALESCE(SUM(total_cost), 0) as total_expenses,
-        COALESCE(SUM(quantity), 0) as total_materials_bought
-      FROM expenses
-      ${expensesWhere}
-    `).get(...expensesParams);
-
-    const totalExpenses = expensesSummary.total_expenses || 0;
-
-    // 3. Lucro Líquido Estimado = Faturamento Total - Gastos com Materiais
     const netProfit = totalRevenue - totalExpenses;
     const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0;
 
-    // 4. Modelo de Placa Mais Vendido no Período
-    const bestModel = db.prepare(`
-      SELECT 
-        m.name as model_name,
-        SUM(s.quantity) as total_quantity,
-        SUM(s.total_price) as total_amount
-      FROM sales s
-      JOIN models m ON s.model_id = m.id
-      ${salesWhere}
-      GROUP BY s.model_id
-      ORDER BY total_quantity DESC, total_amount DESC
-      LIMIT 1
-    `).get(...salesParams);
-
-    // 5. Melhor Vendedor / Sócio no Período
-    const bestSeller = db.prepare(`
-      SELECT 
-        sel.name as seller_name,
-        COUNT(s.id) as sales_count,
-        SUM(s.quantity) as plaques_sold,
-        SUM(s.total_price) as total_amount
-      FROM sales s
-      JOIN sellers sel ON s.seller_id = sel.id
-      ${salesWhere}
-      GROUP BY s.seller_id
-      ORDER BY total_amount DESC
-      LIMIT 1
-    `).get(...salesParams);
-
-    // 6. Participação de Cada Sócio / Vendedor no Período
-    const sellersShare = db.prepare(`
-      SELECT 
-        sel.id,
-        sel.name,
-        COUNT(s.id) as sales_count,
-        COALESCE(SUM(s.quantity), 0) as plaques_sold,
-        COALESCE(SUM(s.total_price), 0) as total_amount
-      FROM sellers sel
-      LEFT JOIN sales s ON sel.id = s.seller_id 
-        ${startDate ? 'AND s.date >= ?' : ''} 
-        ${endDate ? 'AND s.date <= ?' : ''}
-      WHERE sel.is_active = 1
-      GROUP BY sel.id
-      ORDER BY total_amount DESC
-    `).all(...salesParams);
-
-    const sellersWithPercentages = sellersShare.map(s => ({
+    const sellersWithPercentages = (sellersShare || []).map(s => ({
       ...s,
       percentage: totalRevenue > 0 ? Number(((s.total_amount / totalRevenue) * 100).toFixed(1)) : 0
     }));
 
-    // 7. Distribuição de Vendas por Modelo
-    const modelsDistribution = db.prepare(`
-      SELECT 
-        m.name,
-        COALESCE(SUM(s.quantity), 0) as plaques_sold,
-        COALESCE(SUM(s.total_price), 0) as total_revenue
-      FROM models m
-      LEFT JOIN sales s ON m.id = s.model_id
-        ${startDate ? 'AND s.date >= ?' : ''} 
-        ${endDate ? 'AND s.date <= ?' : ''}
-      WHERE m.is_active = 1
-      GROUP BY m.id
-      ORDER BY total_revenue DESC
-    `).all(...salesParams);
-
-    // 8. Histórico por data para gráficos de linha/barra (Vendas vs Gastos)
-    // Agrupa por dia para períodos curtos ou por mês se for ano/completo
-    const isYearOrAll = period === 'year' || period === 'all';
-    const dateFormatSql = isYearOrAll ? "strftime('%Y-%m', date)" : 'date';
-
-    const salesTimeline = db.prepare(`
-      SELECT 
-        ${dateFormatSql} as time_point,
-        COALESCE(SUM(total_price), 0) as sales_total
-      FROM sales
-      ${salesWhere}
-      GROUP BY time_point
-      ORDER BY time_point ASC
-    `).all(...salesParams);
-
-    const expensesTimeline = db.prepare(`
-      SELECT 
-        ${dateFormatSql} as time_point,
-        COALESCE(SUM(total_cost), 0) as expenses_total
-      FROM expenses
-      ${expensesWhere}
-      GROUP BY time_point
-      ORDER BY time_point ASC
-    `).all(...expensesParams);
-
     // Unifica os pontos de tempo para o gráfico
     const timelineMap = {};
-    salesTimeline.forEach(s => {
+    (salesTimeline || []).forEach(s => {
       timelineMap[s.time_point] = { time_point: s.time_point, sales: s.sales_total, expenses: 0 };
     });
-    expensesTimeline.forEach(e => {
+    (expensesTimeline || []).forEach(e => {
       if (!timelineMap[e.time_point]) {
         timelineMap[e.time_point] = { time_point: e.time_point, sales: 0, expenses: e.expenses_total };
       } else {
@@ -250,7 +258,7 @@ router.get('/', (req, res) => {
       charts: {
         timeline,
         sellers_share: sellersWithPercentages,
-        models_distribution: modelsDistribution
+        models_distribution: modelsDistribution || []
       }
     });
   } catch (error) {

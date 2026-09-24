@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const { syncToCloud } = require('../database/cloud');
 
 /**
  * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
@@ -14,26 +13,26 @@ function getTodayDateStr() {
 
 /**
  * Sincroniza automaticamente o status das vendas pendentes:
- * Se a data da venda chegou (date <= hoje), o status é atualizado para 'pago' e persistido no banco.
+ * Se a data da venda chegou (date <= hoje), o status é atualizado para 'pago'.
  */
-function syncPendingSales() {
+async function syncPendingSales() {
   try {
     const today = getTodayDateStr();
-    db.prepare(`
+    await db.run(`
       UPDATE sales 
       SET status = 'pago' 
       WHERE status = 'pendente' AND date <= ?
-    `).run(today);
+    `, today);
   } catch (err) {
     console.error('Erro ao sincronizar status de vendas pendentes:', err);
   }
 }
 
 // GET /api/sales - Listar vendas com detalhes do modelo, vendedor e status atualizado
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // Sincroniza vendas pendentes cuja data chegou antes de listar
-    syncPendingSales();
+    await syncPendingSales();
 
     const { startDate, endDate, seller_id, model_id, status, search } = req.query;
 
@@ -88,7 +87,7 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY s.date DESC, s.id DESC';
 
-    const sales = db.prepare(query).all(...params);
+    const sales = await db.all(query, params);
     res.json(sales);
   } catch (error) {
     console.error('Erro ao buscar vendas:', error);
@@ -96,8 +95,8 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/sales - Registrar nova venda (com status automático: pendente para datas futuras, pago para hoje/passado)
-router.post('/', (req, res) => {
+// POST /api/sales - Registrar nova venda
+router.post('/', async (req, res) => {
   try {
     const { 
       date, 
@@ -135,18 +134,15 @@ router.post('/', (req, res) => {
     const today = getTodayDateStr();
     const saleDate = date || today;
 
-    // Regra de negócio: se status for informado explicitamente e não for 'auto', respeita o status; senão data futura = 'pendente', data atual/passada = 'pago'
     const status = (req.body.status && req.body.status !== 'auto')
       ? req.body.status
       : (saleDate > today ? 'pendente' : 'pago');
 
-    const stmt = db.prepare(`
+    const result = await db.run(`
       INSERT INTO sales (
         date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = stmt.run(
+    `,
       saleDate,
       customer_name.trim(),
       parseInt(model_id, 10),
@@ -159,14 +155,8 @@ router.post('/', (req, res) => {
       notes ? notes.trim() : ''
     );
 
-    // Replicar no SQLite Cloud em tempo real
-    syncToCloud(`
-      INSERT INTO sales (id, date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, result.lastInsertRowid, saleDate, customer_name.trim(), parseInt(model_id, 10), qty, price, totalPrice, parseInt(seller_id, 10), payment_method || 'PIX', status, notes ? notes.trim() : '');
-
     // Retorna a venda completa já com os joins
-    const newSale = db.prepare(`
+    const newSale = await db.get(`
       SELECT 
         s.*,
         m.name AS model_name,
@@ -175,7 +165,7 @@ router.post('/', (req, res) => {
       LEFT JOIN models m ON s.model_id = m.id
       LEFT JOIN sellers sel ON s.seller_id = sel.id
       WHERE s.id = ?
-    `).get(result.lastInsertRowid);
+    `, result.lastInsertRowid);
 
     res.status(201).json(newSale);
   } catch (error) {
@@ -185,7 +175,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/sales/:id - Editar venda
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { 
@@ -200,7 +190,7 @@ router.put('/:id', (req, res) => {
       notes 
     } = req.body;
 
-    const existing = db.prepare('SELECT * FROM sales WHERE id = ?').get(id);
+    const existing = await db.get('SELECT * FROM sales WHERE id = ?', id);
     if (!existing) {
       return res.status(404).json({ error: 'Venda não encontrada.' });
     }
@@ -211,7 +201,6 @@ router.put('/:id', (req, res) => {
     const targetDate = date || existing.date;
     const today = getTodayDateStr();
 
-    // Regra de negócio: se status for informado explicitamente e não for 'auto', respeita o status; senão recalcula pela data
     let statusToSave = existing.status || 'pago';
     if (customStatus && customStatus !== 'auto') {
       statusToSave = customStatus;
@@ -219,7 +208,7 @@ router.put('/:id', (req, res) => {
       statusToSave = targetDate > today ? 'pendente' : 'pago';
     }
 
-    const stmt = db.prepare(`
+    await db.run(`
       UPDATE sales SET
         date = ?,
         customer_name = ?,
@@ -232,9 +221,7 @@ router.put('/:id', (req, res) => {
         status = ?,
         notes = ?
       WHERE id = ?
-    `);
-
-    stmt.run(
+    `,
       targetDate,
       customer_name !== undefined ? customer_name.trim() : existing.customer_name,
       model_id !== undefined ? parseInt(model_id, 10) : existing.model_id,
@@ -248,15 +235,7 @@ router.put('/:id', (req, res) => {
       id
     );
 
-    // Replicar atualização no SQLite Cloud
-    syncToCloud(`
-      UPDATE sales SET
-        date = ?, customer_name = ?, model_id = ?, quantity = ?, unit_price = ?,
-        total_price = ?, seller_id = ?, payment_method = ?, status = ?, notes = ?
-      WHERE id = ?
-    `, targetDate, customer_name !== undefined ? customer_name.trim() : existing.customer_name, model_id !== undefined ? parseInt(model_id, 10) : existing.model_id, qty, price, totalPrice, seller_id !== undefined ? parseInt(seller_id, 10) : existing.seller_id, payment_method !== undefined ? payment_method : existing.payment_method, statusToSave, notes !== undefined ? notes.trim() : existing.notes, id);
-
-    const updatedSale = db.prepare(`
+    const updatedSale = await db.get(`
       SELECT 
         s.*,
         m.name AS model_name,
@@ -265,7 +244,7 @@ router.put('/:id', (req, res) => {
       LEFT JOIN models m ON s.model_id = m.id
       LEFT JOIN sellers sel ON s.seller_id = sel.id
       WHERE s.id = ?
-    `).get(id);
+    `, id);
 
     res.json(updatedSale);
   } catch (error) {
@@ -275,14 +254,10 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/sales/:id - Excluir venda
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM sales WHERE id = ?').run(id);
-
-    // Replicar exclusão no SQLite Cloud
-    syncToCloud('DELETE FROM sales WHERE id = ?', id);
-
+    await db.run('DELETE FROM sales WHERE id = ?', id);
     res.json({ message: 'Venda excluída com sucesso.' });
   } catch (error) {
     console.error('Erro ao excluir venda:', error);

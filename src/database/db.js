@@ -1,135 +1,86 @@
 // src/database/db.js
-// Conexão e inicialização do banco de dados SQLite nativo (node:sqlite)
+// Conexão direta com o SQLite Cloud (100% Nuvem)
+// Compatível com ambiente local e produção no Render
 
-const { DatabaseSync } = require('node:sqlite');
-const path = require('node:path');
-
-// O arquivo do banco de dados será criado na raiz do projeto: gestao_nfc.db
-const DB_PATH = path.resolve(__dirname, '../../gestao_nfc.db');
-const db = new DatabaseSync(DB_PATH);
-
-/**
- * Inicializa a estrutura das tabelas relacionais e insere os dados padrão iniciais.
- * Executado automaticamente na subida do servidor.
- */
-function initDatabase() {
-  // Ativa suporte a chaves estrangeiras (integridade referencial no SQLite)
-  db.exec('PRAGMA foreign_keys = ON;');
-
-  // 1. Tabela de Modelos de Placas NFC
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS models (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      base_price REAL NOT NULL,
-      is_active INTEGER DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  // 2. Tabela de Sócios e Vendedores
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sellers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      role TEXT DEFAULT 'Sócio',
-      is_active INTEGER DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  // 3. Tabela de Gastos e Materiais
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS expenses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      item_name TEXT NOT NULL,
-      category TEXT NOT NULL,
-      quantity REAL NOT NULL,
-      unit_cost REAL NOT NULL,
-      total_cost REAL NOT NULL,
-      supplier TEXT,
-      notes TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  // 4. Tabela de Registro de Vendas
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sales (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      customer_name TEXT NOT NULL,
-      model_id INTEGER NOT NULL,
-      quantity INTEGER NOT NULL,
-      unit_price REAL NOT NULL,
-      total_price REAL NOT NULL,
-      seller_id INTEGER NOT NULL,
-      payment_method TEXT NOT NULL,
-      status TEXT DEFAULT 'pago',
-      notes TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (model_id) REFERENCES models (id),
-      FOREIGN KEY (seller_id) REFERENCES sellers (id)
-    );
-  `);
-
-  // Migração segura: adiciona a coluna status caso o banco já tenha sido criado anteriormente
+// Carrega o arquivo .env automaticamente em ambiente local (Node.js 22+)
+if (typeof process.loadEnvFile === 'function') {
   try {
-    db.exec("ALTER TABLE sales ADD COLUMN status TEXT DEFAULT 'pago';");
-    console.log("✔ Migração: coluna 'status' adicionada com sucesso à tabela de vendas.");
+    process.loadEnvFile();
   } catch (e) {
-    // A coluna já existe no banco, prossegue normalmente
+    // Em produção (Render), as variáveis são injetadas diretamente pelo painel
   }
-
-  // 5. Tabela de Anotações dos Sócios
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      content TEXT NOT NULL,
-      author TEXT DEFAULT 'Geral',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  // Inserção dos dados iniciais caso as tabelas estejam vazias (Seeds)
-  seedInitialData();
 }
+
+const { Database } = require('@sqlitecloud/drivers');
+
+const cloudUrl = process.env.SQLITE_CLOUD_URL || process.env.DATABASE_URL;
+
+if (!cloudUrl || !cloudUrl.startsWith('sqlitecloud://')) {
+  console.error('❌ ERRO CRÍTICO: SQLITE_CLOUD_URL não configurada no ambiente ou no arquivo .env!');
+}
+
+const cloud = new Database(cloudUrl);
 
 /**
- * Popula os 3 modelos de placas iniciais e os 2 sócios solicitados no projeto.
+ * Normaliza parâmetros para o driver @sqlitecloud/drivers.
+ * Se o chamador passar um array (ex: db.all(sql, [param1, param2])),
+ * desempacota para que o driver receba os parâmetros soltos.
  */
-function seedInitialData() {
-  // Verifica se já existem modelos
-  const countModels = db.prepare('SELECT COUNT(*) as count FROM models').get();
-  if (countModels.count === 0) {
-    const insertModel = db.prepare(`
-      INSERT INTO models (name, description, base_price) VALUES (?, ?, ?)
-    `);
-
-    insertModel.run('Placa NFC Acrílico Premium', 'Acrílico espelhado ou cristal com corte a laser e acabamento premium', 89.90);
-    insertModel.run('Placa NFC PVC Compacta', 'Placa de PVC resistente, acabamento fosco e alta durabilidade', 49.90);
-    insertModel.run('Placa NFC Madeira Ecológica', 'Madeira nobre tratada com gravação a laser e chip NFC embutido', 119.90);
-    console.log('✔ Modelos iniciais de placas inseridos no banco.');
+function normalizeParams(args) {
+  if (args.length === 1 && Array.isArray(args[0])) {
+    return args[0];
   }
-
-  // Verifica se já existem sócios/vendedores
-  const countSellers = db.prepare('SELECT COUNT(*) as count FROM sellers').get();
-  if (countSellers.count === 0) {
-    const insertSeller = db.prepare(`
-      INSERT INTO sellers (name, role) VALUES (?, ?)
-    `);
-
-    insertSeller.run('Wendel', 'Sócio');
-    insertSeller.run('Meu Amigo (Sócio)', 'Sócio');
-    console.log('✔ Sócios iniciais cadastrados no banco.');
-  }
+  return args;
 }
 
-// Inicializa imediatamente ao importar
-initDatabase();
+const db = {
+  /**
+   * Executa uma consulta e retorna um array de linhas (SELECT)
+   */
+  async all(sql, ...params) {
+    const norm = normalizeParams(params);
+    const res = await cloud.sql(sql, ...norm);
+    if (!res) return [];
+    if (Array.isArray(res)) return res;
+    return [];
+  },
+
+  /**
+   * Executa uma consulta e retorna a primeira linha ou null (SELECT LIMIT 1)
+   */
+  async get(sql, ...params) {
+    const norm = normalizeParams(params);
+    const res = await cloud.sql(sql, ...norm);
+    if (Array.isArray(res) && res.length > 0) return res[0];
+    return null;
+  },
+
+  /**
+   * Executa instruções de escrita (INSERT, UPDATE, DELETE)
+   * Retorna { lastID, lastInsertRowid, changes }
+   */
+  async run(sql, ...params) {
+    const norm = normalizeParams(params);
+    const res = await cloud.sql(sql, ...norm);
+    const id = res && res.lastID !== undefined ? res.lastID : null;
+    return {
+      lastID: id,
+      lastInsertRowid: id,
+      changes: res && res.changes !== undefined ? res.changes : 0
+    };
+  },
+
+  /**
+   * Executa instruções DDL puras (CREATE TABLE, PRAGMA, etc)
+   */
+  async exec(sql) {
+    return await cloud.sql(sql);
+  },
+
+  /**
+   * Instância direta do cliente do SQLite Cloud
+   */
+  client: cloud
+};
 
 module.exports = db;

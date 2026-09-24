@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const { syncToCloud } = require('../database/cloud');
 
 // GET /api/expenses - Listar gastos com filtros opcionais
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { startDate, endDate, category } = req.query;
 
@@ -26,7 +25,7 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY date DESC, id DESC';
 
-    const expenses = db.prepare(query).all(...params);
+    const expenses = await db.all(query, params);
     res.json(expenses);
   } catch (error) {
     console.error('Erro ao buscar gastos:', error);
@@ -35,7 +34,7 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/expenses/summary - Resumo com Total Gasto, Gastos por Categoria e Custo Médio
-router.get('/summary', (req, res) => {
+router.get('/summary', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -54,7 +53,7 @@ router.get('/summary', (req, res) => {
     }
 
     // 1. Total Geral e Média de Custo Unitário dos Materiais
-    const generalStats = db.prepare(`
+    const generalStats = await db.get(`
       SELECT 
         COUNT(id) as total_records,
         COALESCE(SUM(total_cost), 0) as total_expenses,
@@ -62,10 +61,10 @@ router.get('/summary', (req, res) => {
         COALESCE(SUM(quantity), 0) as total_items_bought
       FROM expenses
       ${dateFilter}
-    `).get(...params);
+    `, params);
 
     // 2. Gastos Agrupados por Categoria
-    const categoryStats = db.prepare(`
+    const categoryStats = await db.all(`
       SELECT 
         category,
         COALESCE(SUM(total_cost), 0) as category_total,
@@ -74,19 +73,21 @@ router.get('/summary', (req, res) => {
       ${dateFilter}
       GROUP BY category
       ORDER BY category_total DESC
-    `).all(...params);
+    `, params);
+
+    const totalExp = generalStats ? generalStats.total_expenses || 0 : 0;
 
     res.json({
-      total_expenses: Number((generalStats.total_expenses || 0).toFixed(2)),
-      average_unit_cost: Number((generalStats.average_unit_cost || 0).toFixed(2)),
-      total_items_bought: generalStats.total_items_bought || 0,
-      total_records: generalStats.total_records || 0,
+      total_expenses: Number(totalExp.toFixed(2)),
+      average_unit_cost: Number((generalStats ? generalStats.average_unit_cost || 0 : 0).toFixed(2)),
+      total_items_bought: generalStats ? generalStats.total_items_bought || 0 : 0,
+      total_records: generalStats ? generalStats.total_records || 0 : 0,
       by_category: categoryStats.map(c => ({
         category: c.category,
-        total: Number(c.category_total.toFixed(2)),
+        total: Number((c.category_total || 0).toFixed(2)),
         count: c.items_count,
-        percentage: generalStats.total_expenses > 0 
-          ? Number(((c.category_total / generalStats.total_expenses) * 100).toFixed(1))
+        percentage: totalExp > 0 
+          ? Number(((c.category_total / totalExp) * 100).toFixed(1))
           : 0
       }))
     });
@@ -97,7 +98,7 @@ router.get('/summary', (req, res) => {
 });
 
 // POST /api/expenses - Registrar novo gasto
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { date, item_name, category, quantity, unit_cost, supplier, notes } = req.body;
 
@@ -120,12 +121,10 @@ router.post('/', (req, res) => {
     const purchaseDate = date || new Date().toISOString().split('T')[0];
     const categoryName = category && category.trim() !== '' ? category.trim() : 'Outros';
 
-    const stmt = db.prepare(`
+    const result = await db.run(`
       INSERT INTO expenses (date, item_name, category, quantity, unit_cost, total_cost, supplier, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = stmt.run(
+    `,
       purchaseDate,
       item_name.trim(),
       categoryName,
@@ -136,13 +135,7 @@ router.post('/', (req, res) => {
       notes ? notes.trim() : ''
     );
 
-    // Replicar no SQLite Cloud
-    syncToCloud(`
-      INSERT INTO expenses (id, date, item_name, category, quantity, unit_cost, total_cost, supplier, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, result.lastInsertRowid, purchaseDate, item_name.trim(), categoryName, qty, unitPrice, totalCost, supplier ? supplier.trim() : '', notes ? notes.trim() : '');
-
-    const newExpense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(result.lastInsertRowid);
+    const newExpense = await db.get('SELECT * FROM expenses WHERE id = ?', result.lastInsertRowid);
     res.status(201).json(newExpense);
   } catch (error) {
     console.error('Erro ao cadastrar gasto:', error);
@@ -151,12 +144,12 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/expenses/:id - Editar gasto
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { date, item_name, category, quantity, unit_cost, supplier, notes } = req.body;
 
-    const existing = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    const existing = await db.get('SELECT * FROM expenses WHERE id = ?', id);
     if (!existing) {
       return res.status(404).json({ error: 'Registro de gasto não encontrado.' });
     }
@@ -165,13 +158,11 @@ router.put('/:id', (req, res) => {
     const updatedUnitCost = unit_cost !== undefined ? parseFloat(unit_cost) : existing.unit_cost;
     const updatedTotalCost = Number((updatedQty * updatedUnitCost).toFixed(2));
 
-    const stmt = db.prepare(`
+    await db.run(`
       UPDATE expenses 
       SET date = ?, item_name = ?, category = ?, quantity = ?, unit_cost = ?, total_cost = ?, supplier = ?, notes = ?
       WHERE id = ?
-    `);
-
-    stmt.run(
+    `,
       date || existing.date,
       item_name !== undefined ? item_name.trim() : existing.item_name,
       category !== undefined ? category.trim() : existing.category,
@@ -183,14 +174,7 @@ router.put('/:id', (req, res) => {
       id
     );
 
-    // Replicar atualização no SQLite Cloud
-    syncToCloud(`
-      UPDATE expenses 
-      SET date = ?, item_name = ?, category = ?, quantity = ?, unit_cost = ?, total_cost = ?, supplier = ?, notes = ?
-      WHERE id = ?
-    `, date || existing.date, item_name !== undefined ? item_name.trim() : existing.item_name, category !== undefined ? category.trim() : existing.category, updatedQty, updatedUnitCost, updatedTotalCost, supplier !== undefined ? supplier.trim() : existing.supplier, notes !== undefined ? notes.trim() : existing.notes, id);
-
-    const updated = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    const updated = await db.get('SELECT * FROM expenses WHERE id = ?', id);
     res.json(updated);
   } catch (error) {
     console.error('Erro ao atualizar gasto:', error);
@@ -199,14 +183,10 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/expenses/:id - Excluir gasto
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
-
-    // Replicar exclusão no SQLite Cloud
-    syncToCloud('DELETE FROM expenses WHERE id = ?', id);
-
+    await db.run('DELETE FROM expenses WHERE id = ?', id);
     res.json({ message: 'Registro de gasto excluído com sucesso.' });
   } catch (error) {
     console.error('Erro ao excluir gasto:', error);

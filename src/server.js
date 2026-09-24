@@ -1,12 +1,12 @@
 // src/server.js
-// Servidor Web Express: API REST e Servidor de Arquivos Estáticos
+// Servidor Web Express: API REST 100% SQLite Cloud e Servidor de Arquivos Estáticos
 
 const express = require('express');
 const cors = require('cors');
 const path = require('node:path');
 
-// Inicializa o banco de dados
-require('./database/db');
+// Cliente do banco de dados na nuvem (SQLite Cloud)
+const db = require('./database/db');
 
 // Importa as rotas modulares
 const modelsRouter = require('./routes/models');
@@ -27,9 +27,6 @@ app.use(express.json());
 // Servir arquivos estáticos do frontend (HTML, CSS, JS, Imagens)
 app.use(express.static(path.join(__dirname, '../public')));
 
-const { checkCloudStatus, syncBidirectional } = require('./database/cloud');
-const db = require('./database/db');
-
 // Rotas da API REST
 app.use('/api/models', modelsRouter);
 app.use('/api/sellers', sellersRouter);
@@ -41,17 +38,32 @@ app.use('/api/notes', notesRouter);
 
 // Rota de Diagnóstico do SQLite Cloud
 app.get('/api/cloud-status', async (req, res) => {
-  const status = await checkCloudStatus();
-  res.json(status);
+  try {
+    await db.get('SELECT 1 as ping');
+    res.json({
+      active: true,
+      mode: 'cloud',
+      message: '☁ 100% Nuvem: Conectado diretamente ao SQLite Cloud!'
+    });
+  } catch (err) {
+    res.json({
+      active: false,
+      mode: 'error',
+      message: `Erro ao conectar no SQLite Cloud: ${err.message}`
+    });
+  }
 });
 
-// Rota para Forçar Sincronização Bidirecional Sob Demanda
+// Rota de Sincronização (Informa ao frontend que a operação é 100% em tempo real na nuvem)
 app.post('/api/cloud-sync', async (req, res) => {
   try {
-    const result = await syncBidirectional(db);
-    res.json(result);
+    await db.get('SELECT 1 as ping');
+    res.json({
+      active: true,
+      message: 'O sistema já opera 100% conectado diretamente no SQLite Cloud. Todos os dados são salvos na nuvem em tempo real!'
+    });
   } catch (error) {
-    console.error('Erro na sincronização manual com a nuvem:', error);
+    console.error('Erro ao verificar conexão com a nuvem:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -66,16 +78,13 @@ app.listen(PORT, async () => {
   console.log(`====================================================`);
   console.log(`🚀 Sistema de Gestão NFC rodando com sucesso!`);
   console.log(`📡 Endereço: http://localhost:${PORT}`);
-  console.log(`📊 Banco de dados: SQLite nativo conectado`);
+  console.log(`☁ Banco de dados: 100% SQLite Cloud (Nuvem)`);
 
-  // Verifica status e sincroniza bidirecionalmente com o SQLite Cloud se configurado
-  const cloud = await checkCloudStatus();
-  if (cloud.active) {
-    console.log(`☁ SQLite Cloud: ATIVO E CONECTADO COM SUCESSO!`);
-    console.log(`🔄 Iniciando sincronização bidirecional (Nuvem ➔ Local e Local ➔ Nuvem)...`);
-    await syncBidirectional(db);
-  } else {
-    console.log(`ℹ SQLite Cloud: Modo Local ativo (${cloud.message})`);
+  try {
+    await db.get('SELECT 1 as ping');
+    console.log(`✅ SQLite Cloud: CONECTADO COM SUCESSO!`);
+  } catch (err) {
+    console.error(`❌ Falha na conexão com SQLite Cloud:`, err.message);
   }
   console.log(`====================================================`);
 });

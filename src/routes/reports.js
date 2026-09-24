@@ -1,12 +1,12 @@
 // src/routes/reports.js
-// Rotas da API para relatórios consolidados por Dia, Semana, Mês e Ano
+// Rotas da API para relatórios consolidados por Dia, Semana, Mês e Ano via SQLite Cloud
 
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
 // GET /api/reports/sales - Relatórios de vendas agrupados
-router.get('/sales', (req, res) => {
+router.get('/sales', async (req, res) => {
   try {
     const { groupBy = 'month', startDate, endDate } = req.query;
 
@@ -52,7 +52,7 @@ router.get('/sales', (req, res) => {
       ORDER BY period_group DESC
     `;
 
-    const records = db.prepare(query).all(...params);
+    const records = await db.all(query, params);
 
     // Adiciona o cálculo de ticket médio unitário e variação com o período anterior
     const enrichedRecords = records.map((record, index) => {
@@ -60,7 +60,6 @@ router.get('/sales', (req, res) => {
         ? Number((record.total_amount / record.total_quantity).toFixed(2)) 
         : 0;
 
-      // Como a lista está ordenada decrescente, o próximo item (index + 1) é o período anterior cronológico
       const previous = records[index + 1];
       let diffPercent = null;
 
@@ -91,9 +90,9 @@ router.get('/sales', (req, res) => {
 });
 
 // GET /api/reports/export/csv - Download de todas as vendas em CSV (compatível com Excel)
-router.get('/export/csv', (req, res) => {
+router.get('/export/csv', async (req, res) => {
   try {
-    const sales = db.prepare(`
+    const sales = await db.all(`
       SELECT 
         s.date,
         s.customer_name,
@@ -109,7 +108,7 @@ router.get('/export/csv', (req, res) => {
       LEFT JOIN models m ON s.model_id = m.id
       LEFT JOIN sellers sel ON s.seller_id = sel.id
       ORDER BY s.date DESC
-    `).all();
+    `);
 
     // Cabeçalho CSV com BOM UTF-8 para o Excel abrir sem erro de acentos
     let csvContent = '\uFEFFData;Cliente;Modelo;Quantidade;Valor Unitário (R$);Total (R$);Vendedor;Pagamento;Status;Observações\n';
@@ -141,17 +140,20 @@ router.get('/export/csv', (req, res) => {
 });
 
 // GET /api/reports/export/backup - Backup completo do banco de dados em formato JSON
-router.get('/export/backup', (req, res) => {
+router.get('/export/backup', async (req, res) => {
   try {
-    const models = db.prepare('SELECT * FROM models').all();
-    const sellers = db.prepare('SELECT * FROM sellers').all();
-    const expenses = db.prepare('SELECT * FROM expenses').all();
-    const sales = db.prepare('SELECT * FROM sales').all();
-    const notes = db.prepare('SELECT * FROM notes').all();
+    const [models, sellers, expenses, sales, notes] = await Promise.all([
+      db.all('SELECT * FROM models'),
+      db.all('SELECT * FROM sellers'),
+      db.all('SELECT * FROM expenses'),
+      db.all('SELECT * FROM sales'),
+      db.all('SELECT * FROM notes')
+    ]);
 
     const backup = {
       version: '1.0',
       exported_at: new Date().toISOString(),
+      source: 'SQLite Cloud',
       data: {
         models,
         sellers,

@@ -1,17 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const { syncToCloud } = require('../database/cloud');
 
 // GET /api/models - Listar todos os modelos de placas
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const showAll = req.query.all === 'true';
     const query = showAll
       ? 'SELECT * FROM models ORDER BY id DESC'
       : 'SELECT * FROM models WHERE is_active = 1 ORDER BY name ASC';
 
-    const models = db.prepare(query).all();
+    const models = await db.all(query);
     res.json(models);
   } catch (error) {
     console.error('Erro ao buscar modelos:', error);
@@ -20,7 +19,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/models - Cadastrar novo modelo
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, description, base_price } = req.body;
 
@@ -33,19 +32,14 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Preço base inválido.' });
     }
 
-    const stmt = db.prepare(`
-      INSERT INTO models (name, description, base_price) VALUES (?, ?, ?)
-    `);
+    const result = await db.run(
+      'INSERT INTO models (name, description, base_price) VALUES (?, ?, ?)',
+      name.trim(),
+      description ? description.trim() : '',
+      price
+    );
 
-    const result = stmt.run(name.trim(), description ? description.trim() : '', price);
-
-    // Replicar no SQLite Cloud
-    syncToCloud(`
-      INSERT INTO models (id, name, description, base_price, is_active)
-      VALUES (?, ?, ?, ?, 1)
-    `, result.lastInsertRowid, name.trim(), description ? description.trim() : '', price);
-
-    const newModel = db.prepare('SELECT * FROM models WHERE id = ?').get(result.lastInsertRowid);
+    const newModel = await db.get('SELECT * FROM models WHERE id = ?', result.lastInsertRowid);
     res.status(201).json(newModel);
   } catch (error) {
     console.error('Erro ao cadastrar modelo:', error);
@@ -54,12 +48,12 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/models/:id - Editar modelo existente
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, base_price, is_active } = req.body;
 
-    const existing = db.prepare('SELECT * FROM models WHERE id = ?').get(id);
+    const existing = await db.get('SELECT * FROM models WHERE id = ?', id);
     if (!existing) {
       return res.status(404).json({ error: 'Modelo não encontrado.' });
     }
@@ -69,22 +63,16 @@ router.put('/:id', (req, res) => {
     const updatedPrice = base_price !== undefined ? parseFloat(base_price) : existing.base_price;
     const updatedActive = is_active !== undefined ? (is_active ? 1 : 0) : existing.is_active;
 
-    const stmt = db.prepare(`
-      UPDATE models 
-      SET name = ?, description = ?, base_price = ?, is_active = ?
-      WHERE id = ?
-    `);
+    await db.run(
+      'UPDATE models SET name = ?, description = ?, base_price = ?, is_active = ? WHERE id = ?',
+      updatedName,
+      updatedDesc,
+      updatedPrice,
+      updatedActive,
+      id
+    );
 
-    stmt.run(updatedName, updatedDesc, updatedPrice, updatedActive, id);
-
-    // Replicar no SQLite Cloud
-    syncToCloud(`
-      UPDATE models 
-      SET name = ?, description = ?, base_price = ?, is_active = ?
-      WHERE id = ?
-    `, updatedName, updatedDesc, updatedPrice, updatedActive, id);
-
-    const updatedModel = db.prepare('SELECT * FROM models WHERE id = ?').get(id);
+    const updatedModel = await db.get('SELECT * FROM models WHERE id = ?', id);
     res.json(updatedModel);
   } catch (error) {
     console.error('Erro ao atualizar modelo:', error);
@@ -93,22 +81,20 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/models/:id - Desativar ou excluir modelo
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
     // Verifica se há vendas vinculadas a este modelo
-    const salesCount = db.prepare('SELECT COUNT(*) as count FROM sales WHERE model_id = ?').get(id);
+    const salesCount = await db.get('SELECT COUNT(*) as count FROM sales WHERE model_id = ?', id);
 
-    if (salesCount.count > 0) {
+    if (salesCount && salesCount.count > 0) {
       // Se houver histórico de vendas, apenas desativamos (Soft Delete) para manter a integridade dos relatórios passados
-      db.prepare('UPDATE models SET is_active = 0 WHERE id = ?').run(id);
-      syncToCloud('UPDATE models SET is_active = 0 WHERE id = ?', id);
+      await db.run('UPDATE models SET is_active = 0 WHERE id = ?', id);
       return res.json({ message: 'Modelo desativado com sucesso para preservar o histórico de vendas.' });
     } else {
       // Se nunca foi vendido, pode ser removido fisicamente
-      db.prepare('DELETE FROM models WHERE id = ?').run(id);
-      syncToCloud('DELETE FROM models WHERE id = ?', id);
+      await db.run('DELETE FROM models WHERE id = ?', id);
       return res.json({ message: 'Modelo excluído com sucesso.' });
     }
   } catch (error) {

@@ -1,15 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const { syncToCloud } = require('../database/cloud');
 
 // GET /api/notes - Listar todas as anotações
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const notes = db.prepare(`
+    const notes = await db.all(`
       SELECT * FROM notes 
       ORDER BY id DESC
-    `).all();
+    `);
 
     res.json(notes);
   } catch (error) {
@@ -19,7 +18,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/notes - Criar nova anotação
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title, content, author } = req.body;
 
@@ -30,20 +29,12 @@ router.post('/', (req, res) => {
     const noteTitle = title && title.trim() !== '' ? title.trim() : 'Sem Título';
     const noteAuthor = author && author.trim() !== '' ? author.trim() : 'Geral';
 
-    const stmt = db.prepare(`
+    const result = await db.run(`
       INSERT INTO notes (title, content, author, created_at, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `);
+    `, noteTitle, content.trim(), noteAuthor);
 
-    const result = stmt.run(noteTitle, content.trim(), noteAuthor);
-
-    // Replicar no SQLite Cloud
-    syncToCloud(`
-      INSERT INTO notes (id, title, content, author)
-      VALUES (?, ?, ?, ?)
-    `, result.lastInsertRowid, noteTitle, content.trim(), noteAuthor);
-
-    const newNote = db.prepare('SELECT * FROM notes WHERE id = ?').get(result.lastInsertRowid);
+    const newNote = await db.get('SELECT * FROM notes WHERE id = ?', result.lastInsertRowid);
     res.status(201).json(newNote);
   } catch (error) {
     console.error('Erro ao criar anotação:', error);
@@ -52,12 +43,12 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/notes/:id - Editar anotação existente
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { title, content, author } = req.body;
 
-    const existing = db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
+    const existing = await db.get('SELECT * FROM notes WHERE id = ?', id);
     if (!existing) {
       return res.status(404).json({ error: 'Anotação não encontrada.' });
     }
@@ -70,22 +61,13 @@ router.put('/:id', (req, res) => {
       return res.status(400).json({ error: 'O conteúdo da anotação não pode ficar em branco.' });
     }
 
-    const stmt = db.prepare(`
-      UPDATE notes 
-      SET title = ?, content = ?, author = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-    stmt.run(updatedTitle, updatedContent, updatedAuthor, id);
-
-    // Replicar no SQLite Cloud
-    syncToCloud(`
+    await db.run(`
       UPDATE notes 
       SET title = ?, content = ?, author = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, updatedTitle, updatedContent, updatedAuthor, id);
 
-    const updatedNote = db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
+    const updatedNote = await db.get('SELECT * FROM notes WHERE id = ?', id);
     res.json(updatedNote);
   } catch (error) {
     console.error('Erro ao atualizar anotação:', error);
@@ -94,14 +76,10 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/notes/:id - Excluir anotação
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM notes WHERE id = ?').run(id);
-
-    // Replicar no SQLite Cloud
-    syncToCloud('DELETE FROM notes WHERE id = ?', id);
-
+    await db.run('DELETE FROM notes WHERE id = ?', id);
     res.json({ message: 'Anotação excluída com sucesso.' });
   } catch (error) {
     console.error('Erro ao excluir anotação:', error);

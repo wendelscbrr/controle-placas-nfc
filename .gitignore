@@ -5,3 +5,12 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Variáveis de ambiente e credenciais
+.env
+.env.*
+
+# Banco de dados SQLite local
+*.db
+*.db-journal
+

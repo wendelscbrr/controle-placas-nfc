@@ -1,47 +1,46 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const { syncToCloud } = require('../database/cloud');
 
 // GET /api/sellers - Listar sócios/vendedores com métricas individuais de vendas
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const showAll = req.query.all === 'true';
     const baseQuery = showAll 
       ? 'SELECT * FROM sellers ORDER BY id ASC'
       : 'SELECT * FROM sellers WHERE is_active = 1 ORDER BY id ASC';
 
-    const sellers = db.prepare(baseQuery).all();
+    const sellers = await db.all(baseQuery);
 
     // Calcula o faturamento global da empresa para podermos descobrir a % de participação
-    const globalSales = db.prepare('SELECT COALESCE(SUM(total_price), 0) as total FROM sales').get();
-    const globalTotal = globalSales.total || 0;
+    const globalSales = await db.get('SELECT COALESCE(SUM(total_price), 0) as total FROM sales');
+    const globalTotal = globalSales ? globalSales.total || 0 : 0;
 
     // Enriquece cada sócio/vendedor com suas estatísticas reais
-    const enrichedSellers = sellers.map(seller => {
-      const stats = db.prepare(`
+    const enrichedSellers = await Promise.all(sellers.map(async (seller) => {
+      const stats = await db.get(`
         SELECT 
           COUNT(id) as sales_count,
           COALESCE(SUM(quantity), 0) as items_sold,
           COALESCE(SUM(total_price), 0) as total_sold
         FROM sales 
         WHERE seller_id = ?
-      `).get(seller.id);
+      `, seller.id);
 
-      const count = stats.sales_count || 0;
-      const total = stats.total_sold || 0;
+      const count = stats ? stats.sales_count || 0 : 0;
+      const total = stats ? stats.total_sold || 0 : 0;
       const avgSale = count > 0 ? (total / count) : 0;
       const percentage = globalTotal > 0 ? ((total / globalTotal) * 100) : 0;
 
       return {
         ...seller,
         sales_count: count,
-        items_sold: stats.items_sold || 0,
+        items_sold: stats ? stats.items_sold || 0 : 0,
         total_sold: Number(total.toFixed(2)),
         average_sale: Number(avgSale.toFixed(2)),
         sales_percentage: Number(percentage.toFixed(1))
       };
-    });
+    }));
 
     res.json(enrichedSellers);
   } catch (error) {
@@ -51,7 +50,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/sellers - Cadastrar novo sócio ou vendedor
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, role } = req.body;
 
@@ -59,19 +58,13 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'O nome da pessoa é obrigatório.' });
     }
 
-    const stmt = db.prepare(`
-      INSERT INTO sellers (name, role) VALUES (?, ?)
-    `);
+    const result = await db.run(
+      'INSERT INTO sellers (name, role, is_active) VALUES (?, ?, 1)',
+      name.trim(),
+      role ? role.trim() : 'Vendedor'
+    );
 
-    const result = stmt.run(name.trim(), role ? role.trim() : 'Vendedor');
-
-    // Replicar no SQLite Cloud
-    syncToCloud(`
-      INSERT INTO sellers (id, name, role, is_active)
-      VALUES (?, ?, ?, 1)
-    `, result.lastInsertRowid, name.trim(), role ? role.trim() : 'Vendedor');
-
-    const newSeller = db.prepare('SELECT * FROM sellers WHERE id = ?').get(result.lastInsertRowid);
+    const newSeller = await db.get('SELECT * FROM sellers WHERE id = ?', result.lastInsertRowid);
     res.status(201).json(newSeller);
   } catch (error) {
     console.error('Erro ao cadastrar vendedor:', error);
@@ -80,12 +73,12 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/sellers/:id - Editar dados do sócio ou vendedor
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, role, is_active } = req.body;
 
-    const existing = db.prepare('SELECT * FROM sellers WHERE id = ?').get(id);
+    const existing = await db.get('SELECT * FROM sellers WHERE id = ?', id);
     if (!existing) {
       return res.status(404).json({ error: 'Pessoa não encontrada.' });
     }
@@ -94,22 +87,15 @@ router.put('/:id', (req, res) => {
     const updatedRole = role !== undefined ? role.trim() : existing.role;
     const updatedActive = is_active !== undefined ? (is_active ? 1 : 0) : existing.is_active;
 
-    const stmt = db.prepare(`
-      UPDATE sellers 
-      SET name = ?, role = ?, is_active = ?
-      WHERE id = ?
-    `);
+    await db.run(
+      'UPDATE sellers SET name = ?, role = ?, is_active = ? WHERE id = ?',
+      updatedName,
+      updatedRole,
+      updatedActive,
+      id
+    );
 
-    stmt.run(updatedName, updatedRole, updatedActive, id);
-
-    // Replicar no SQLite Cloud
-    syncToCloud(`
-      UPDATE sellers 
-      SET name = ?, role = ?, is_active = ?
-      WHERE id = ?
-    `, updatedName, updatedRole, updatedActive, id);
-
-    const updatedSeller = db.prepare('SELECT * FROM sellers WHERE id = ?').get(id);
+    const updatedSeller = await db.get('SELECT * FROM sellers WHERE id = ?', id);
     res.json(updatedSeller);
   } catch (error) {
     console.error('Erro ao atualizar sócio/vendedor:', error);
@@ -118,20 +104,18 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/sellers/:id - Excluir ou desativar sócio/vendedor
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const salesCount = db.prepare('SELECT COUNT(*) as count FROM sales WHERE seller_id = ?').get(id);
+    const salesCount = await db.get('SELECT COUNT(*) as count FROM sales WHERE seller_id = ?', id);
 
-    if (salesCount.count > 0) {
+    if (salesCount && salesCount.count > 0) {
       // Se já houver vendas atribuídas, apenas desativamos para manter a consistência financeira
-      db.prepare('UPDATE sellers SET is_active = 0 WHERE id = ?').run(id);
-      syncToCloud('UPDATE sellers SET is_active = 0 WHERE id = ?', id);
+      await db.run('UPDATE sellers SET is_active = 0 WHERE id = ?', id);
       return res.json({ message: 'Vendedor desativado com sucesso para manter o histórico de vendas.' });
     } else {
-      db.prepare('DELETE FROM sellers WHERE id = ?').run(id);
-      syncToCloud('DELETE FROM sellers WHERE id = ?', id);
+      await db.run('DELETE FROM sellers WHERE id = ?', id);
       return res.json({ message: 'Vendedor removido com sucesso.' });
     }
   } catch (error) {
