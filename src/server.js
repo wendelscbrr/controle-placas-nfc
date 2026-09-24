@@ -27,7 +27,7 @@ app.use(express.json());
 // Servir arquivos estáticos do frontend (HTML, CSS, JS, Imagens)
 app.use(express.static(path.join(__dirname, '../public')));
 
-const { checkCloudStatus, syncLocalWithCloud } = require('./database/cloud');
+const { checkCloudStatus, syncBidirectional } = require('./database/cloud');
 const db = require('./database/db');
 
 // Rotas da API REST
@@ -45,6 +45,17 @@ app.get('/api/cloud-status', async (req, res) => {
   res.json(status);
 });
 
+// Rota para Forçar Sincronização Bidirecional Sob Demanda
+app.post('/api/cloud-sync', async (req, res) => {
+  try {
+    const result = await syncBidirectional(db);
+    res.json(result);
+  } catch (error) {
+    console.error('Erro na sincronização manual com a nuvem:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Rota de fallback padrão para servir a aplicação (SPA) compatível com Express 5
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
@@ -57,12 +68,12 @@ app.listen(PORT, async () => {
   console.log(`📡 Endereço: http://localhost:${PORT}`);
   console.log(`📊 Banco de dados: SQLite nativo conectado`);
 
-  // Verifica status do SQLite Cloud se configurado
+  // Verifica status e sincroniza bidirecionalmente com o SQLite Cloud se configurado
   const cloud = await checkCloudStatus();
   if (cloud.active) {
     console.log(`☁ SQLite Cloud: ATIVO E CONECTADO COM SUCESSO!`);
-    // Sincroniza dados com o SQLite Cloud
-    await syncLocalWithCloud(db);
+    console.log(`🔄 Iniciando sincronização bidirecional (Nuvem ➔ Local e Local ➔ Nuvem)...`);
+    await syncBidirectional(db);
   } else {
     console.log(`ℹ SQLite Cloud: Modo Local ativo (${cloud.message})`);
   }

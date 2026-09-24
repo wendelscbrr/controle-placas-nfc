@@ -148,7 +148,7 @@ async function syncToCloud(sql, ...params) {
 }
 
 /**
- * Sincroniza os registros locais com o SQLite Cloud na inicialização
+ * Sincroniza os registros locais com o SQLite Cloud (Local -> Nuvem)
  */
 async function syncLocalWithCloud(localDb) {
   const cloudUrl = process.env.SQLITE_CLOUD_URL || process.env.DATABASE_URL;
@@ -203,9 +203,169 @@ async function syncLocalWithCloud(localDb) {
       `, n.id, n.title || '', n.content, n.author || 'Geral');
     }
 
-    console.log(`☁ [SQLite Cloud] Sincronização inicial concluída com sucesso!`);
+    console.log(`☁ ➔ ☁ [Local -> SQLite Cloud] Envio de dados pendentes finalizado.`);
   } catch (err) {
-    console.error(`❌ [SQLite Cloud] Erro na sincronização inicial:`, err.message);
+    console.error(`❌ [Local -> SQLite Cloud] Erro:`, err.message);
+  }
+}
+
+/**
+ * Puxa todos os dados do SQLite Cloud para o banco de dados local (Nuvem -> Local)
+ */
+async function pullCloudToLocal(localDb) {
+  const cloud = getCloudDatabase();
+  if (!cloud) return { success: false, message: 'SQLite Cloud não conectado.' };
+
+  const stats = { models: 0, sellers: 0, expenses: 0, sales: 0, notes: 0 };
+
+  // 1. Puxa Modelos da Nuvem
+  try {
+    const cloudModels = await cloud.sql('SELECT * FROM models');
+    if (Array.isArray(cloudModels) && cloudModels.length > 0) {
+      const stmt = localDb.prepare(`
+        INSERT INTO models (id, name, description, base_price, is_active)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          base_price = excluded.base_price,
+          is_active = excluded.is_active
+      `);
+      for (const m of cloudModels) {
+        stmt.run(m.id, m.name, m.description || '', m.base_price, m.is_active !== undefined ? m.is_active : 1);
+        stats.models++;
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ [Sync Cloud->Local] Erro em modelos:', err.message);
+  }
+
+  // 2. Puxa Sócios da Nuvem
+  try {
+    const cloudSellers = await cloud.sql('SELECT * FROM sellers');
+    if (Array.isArray(cloudSellers) && cloudSellers.length > 0) {
+      const stmt = localDb.prepare(`
+        INSERT INTO sellers (id, name, role, is_active)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          role = excluded.role,
+          is_active = excluded.is_active
+      `);
+      for (const s of cloudSellers) {
+        stmt.run(s.id, s.name, s.role || 'Sócio', s.is_active !== undefined ? s.is_active : 1);
+        stats.sellers++;
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ [Sync Cloud->Local] Erro em sócios:', err.message);
+  }
+
+  // 3. Puxa Gastos da Nuvem
+  try {
+    const cloudExpenses = await cloud.sql('SELECT * FROM expenses');
+    if (Array.isArray(cloudExpenses) && cloudExpenses.length > 0) {
+      const stmt = localDb.prepare(`
+        INSERT INTO expenses (id, date, item_name, category, quantity, unit_cost, total_cost, supplier, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          date = excluded.date,
+          item_name = excluded.item_name,
+          category = excluded.category,
+          quantity = excluded.quantity,
+          unit_cost = excluded.unit_cost,
+          total_cost = excluded.total_cost,
+          supplier = excluded.supplier,
+          notes = excluded.notes
+      `);
+      for (const e of cloudExpenses) {
+        stmt.run(e.id, e.date, e.item_name, e.category, e.quantity, e.unit_cost, e.total_cost, e.supplier || '', e.notes || '');
+        stats.expenses++;
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ [Sync Cloud->Local] Erro em gastos:', err.message);
+  }
+
+  // 4. Puxa Vendas da Nuvem
+  try {
+    const cloudSales = await cloud.sql('SELECT * FROM sales');
+    if (Array.isArray(cloudSales) && cloudSales.length > 0) {
+      const stmt = localDb.prepare(`
+        INSERT INTO sales (id, date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, status, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          date = excluded.date,
+          customer_name = excluded.customer_name,
+          model_id = excluded.model_id,
+          quantity = excluded.quantity,
+          unit_price = excluded.unit_price,
+          total_price = excluded.total_price,
+          seller_id = excluded.seller_id,
+          payment_method = excluded.payment_method,
+          status = excluded.status,
+          notes = excluded.notes
+      `);
+      for (const s of cloudSales) {
+        stmt.run(s.id, s.date, s.customer_name, s.model_id, s.quantity, s.unit_price, s.total_price, s.seller_id, s.payment_method, s.status || 'pago', s.notes || '');
+        stats.sales++;
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ [Sync Cloud->Local] Erro em vendas:', err.message);
+  }
+
+  // 5. Puxa Anotações da Nuvem
+  try {
+    const cloudNotes = await cloud.sql('SELECT * FROM notes');
+    if (Array.isArray(cloudNotes) && cloudNotes.length > 0) {
+      const stmt = localDb.prepare(`
+        INSERT INTO notes (id, title, content, author)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title = excluded.title,
+          content = excluded.content,
+          author = excluded.author
+      `);
+      for (const n of cloudNotes) {
+        stmt.run(n.id, n.title || '', n.content, n.author || 'Geral');
+        stats.notes++;
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ [Sync Cloud->Local] Erro em anotações:', err.message);
+  }
+
+  console.log(`☁ ➔ 💻 [SQLite Cloud -> Local] Dados carregados da nuvem com sucesso! Vendas: ${stats.sales}, Gastos: ${stats.expenses}, Modelos: ${stats.models}, Sócios: ${stats.sellers}, Notas: ${stats.notes}`);
+  return { success: true, stats };
+}
+
+/**
+ * Sincronização bidirecional completa:
+ * 1. Puxa dados da Nuvem para o Local (Cloud -> Local)
+ * 2. Garante que qualquer registro local pendente seja enviado para a Nuvem (Local -> Cloud)
+ */
+async function syncBidirectional(localDb) {
+  const cloudUrl = process.env.SQLITE_CLOUD_URL || process.env.DATABASE_URL;
+  if (!cloudUrl || !cloudUrl.startsWith('sqlitecloud://')) {
+    return { active: false, message: 'SQLite Cloud não configurado.' };
+  }
+
+  try {
+    // 1. Puxa novidades da nuvem
+    const pullResult = await pullCloudToLocal(localDb);
+
+    // 2. Envia pendências locais se houver
+    await syncLocalWithCloud(localDb);
+
+    return {
+      active: true,
+      message: 'Sincronização bidirecional realizada com sucesso!',
+      stats: pullResult.stats
+    };
+  } catch (err) {
+    console.error('❌ Erro na sincronização bidirecional:', err.message);
+    return { active: false, error: err.message };
   }
 }
 
@@ -213,5 +373,7 @@ module.exports = {
   getCloudDatabase,
   checkCloudStatus,
   syncToCloud,
-  syncLocalWithCloud
+  syncLocalWithCloud,
+  pullCloudToLocal,
+  syncBidirectional
 };

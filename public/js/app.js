@@ -182,6 +182,32 @@ function setupModalListeners() {
     document.getElementById('form-note')?.reset();
     openModal('modal-note');
   });
+
+  // Gatilhos de sincronização com o SQLite Cloud
+  const handleCloudSync = async () => {
+    showToast('☁️ Conectando e sincronizando com o SQLite Cloud...', 'success');
+    try {
+      const res = await API.syncCloud();
+      if (res.active) {
+        showToast('✓ Sincronização concluída com sucesso!');
+        await syncModelsAndSellers();
+        if (state.currentTab === 'dashboard') loadDashboard();
+        if (state.currentTab === 'vendas') loadSales();
+        if (state.currentTab === 'gastos') loadExpenses();
+        if (state.currentTab === 'modelos') loadModels();
+        if (state.currentTab === 'socios') loadSellers();
+        if (state.currentTab === 'relatorios') loadReports();
+        if (state.currentTab === 'anotacoes') loadNotes();
+      } else {
+        showToast(res.message || 'SQLite Cloud não configurado.', 'error');
+      }
+    } catch (err) {
+      showToast('Erro ao sincronizar com a nuvem: ' + err.message, 'error');
+    }
+  };
+
+  document.getElementById('btn-sync-cloud')?.addEventListener('click', handleCloudSync);
+  document.getElementById('btn-sync-cloud-mobile')?.addEventListener('click', handleCloudSync);
 }
 
 // =============================================================================

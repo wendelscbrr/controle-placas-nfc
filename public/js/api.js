@@ -217,5 +217,18 @@ const API = {
     const res = await this.request(`/api/notes/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir anotação');
     return res.json();
+  },
+
+  // 8. SQLite Cloud (Sincronização Bidirecional)
+  async syncCloud() {
+    const res = await this.request('/api/cloud-sync', { method: 'POST' });
+    if (!res.ok) throw new Error('Falha ao sincronizar com o SQLite Cloud');
+    return res.json();
+  },
+
+  async getCloudStatus() {
+    const res = await this.request('/api/cloud-status');
+    if (!res.ok) throw new Error('Falha ao consultar status da nuvem');
+    return res.json();
   }
 };
