@@ -90,4 +90,85 @@ router.get('/sales', (req, res) => {
   }
 });
 
+// GET /api/reports/export/csv - Download de todas as vendas em CSV (compatível com Excel)
+router.get('/export/csv', (req, res) => {
+  try {
+    const sales = db.prepare(`
+      SELECT 
+        s.date,
+        s.customer_name,
+        m.name AS model_name,
+        s.quantity,
+        s.unit_price,
+        s.total_price,
+        sel.name AS seller_name,
+        s.payment_method,
+        COALESCE(s.status, 'pago') AS status,
+        s.notes
+      FROM sales s
+      LEFT JOIN models m ON s.model_id = m.id
+      LEFT JOIN sellers sel ON s.seller_id = sel.id
+      ORDER BY s.date DESC
+    `).all();
+
+    // Cabeçalho CSV com BOM UTF-8 para o Excel abrir sem erro de acentos
+    let csvContent = '\uFEFFData;Cliente;Modelo;Quantidade;Valor Unitário (R$);Total (R$);Vendedor;Pagamento;Status;Observações\n';
+
+    sales.forEach(sale => {
+      const line = [
+        sale.date,
+        `"${(sale.customer_name || '').replace(/"/g, '""')}"`,
+        `"${(sale.model_name || '').replace(/"/g, '""')}"`,
+        sale.quantity,
+        sale.unit_price.toFixed(2).replace('.', ','),
+        sale.total_price.toFixed(2).replace('.', ','),
+        `"${(sale.seller_name || '').replace(/"/g, '""')}"`,
+        `"${(sale.payment_method || '').replace(/"/g, '""')}"`,
+        sale.status.toUpperCase(),
+        `"${(sale.notes || '').replace(/"/g, '""')}"`
+      ].join(';');
+      csvContent += line + '\n';
+    });
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="vendas_nfc_${dateStr}.csv"`);
+    res.send(csvContent);
+  } catch (error) {
+    console.error('Erro ao exportar CSV:', error);
+    res.status(500).json({ error: 'Erro ao gerar arquivo CSV' });
+  }
+});
+
+// GET /api/reports/export/backup - Backup completo do banco de dados em formato JSON
+router.get('/export/backup', (req, res) => {
+  try {
+    const models = db.prepare('SELECT * FROM models').all();
+    const sellers = db.prepare('SELECT * FROM sellers').all();
+    const expenses = db.prepare('SELECT * FROM expenses').all();
+    const sales = db.prepare('SELECT * FROM sales').all();
+    const notes = db.prepare('SELECT * FROM notes').all();
+
+    const backup = {
+      version: '1.0',
+      exported_at: new Date().toISOString(),
+      data: {
+        models,
+        sellers,
+        expenses,
+        sales,
+        notes
+      }
+    };
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="backup_gestao_nfc_${dateStr}.json"`);
+    res.send(JSON.stringify(backup, null, 2));
+  } catch (error) {
+    console.error('Erro ao gerar backup:', error);
+    res.status(500).json({ error: 'Erro ao gerar arquivo de backup' });
+  }
+});
+
 module.exports = router;

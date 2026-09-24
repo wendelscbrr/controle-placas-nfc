@@ -401,13 +401,22 @@
             <h2 id="title-relatorios" class="section-title">Relatórios Financeiros</h2>
             <p class="section-subtitle">Acompanhe o crescimento e evolução das vendas por períodos.</p>
           </div>
-          <!-- Agrupamento -->
-          <div class="filter-bar" style="margin-bottom: 0;">
-            <button class="filter-btn report-group-btn" data-group="day">Por Dia</button>
-            <button class="filter-btn report-group-btn" data-group="week">Por Semana</button>
-            <button class="filter-btn report-group-btn active" data-group="month">Por Mês</button>
-            <button class="filter-btn report-group-btn" data-group="year">Por Ano</button>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <a href="/api/reports/export/csv" class="btn btn-secondary btn-sm" download title="Exportar todas as vendas para Excel">
+              📊 Exportar Vendas (Excel / CSV)
+            </a>
+            <a href="/api/reports/export/backup" class="btn btn-secondary btn-sm" download title="Baixar cópia de segurança de todos os dados">
+              💾 Baixar Backup Geral (JSON)
+            </a>
           </div>
+        </div>
+
+        <!-- Agrupamento -->
+        <div class="filter-bar" style="margin-top: 1rem; margin-bottom: 0.75rem;">
+          <button class="filter-btn report-group-btn" data-group="day">Por Dia</button>
+          <button class="filter-btn report-group-btn" data-group="week">Por Semana</button>
+          <button class="filter-btn report-group-btn active" data-group="month">Por Mês</button>
+          <button class="filter-btn report-group-btn" data-group="year">Por Ano</button>
         </div>
 
         <div class="table-wrapper">

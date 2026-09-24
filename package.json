@@ -16,6 +16,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@sqlitecloud/drivers": "^1.0.982",
     "cors": "^2.8.6",
     "express": "^5.2.1"
   }

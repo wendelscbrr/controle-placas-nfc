@@ -1039,9 +1039,9 @@ window.deleteNoteItem = async function(id) {
 };
 
 // =============================================================================
-// INICIALIZAÇÃO DA APLICAÇÃO (DOMContentLoaded)
+// INICIALIZAÇÃO DA APLICAÇÃO (Robusta para carregamento direto ou em cache)
 // =============================================================================
-document.addEventListener('DOMContentLoaded', async () => {
+function initApp() {
   console.log('⚡ NFC Gestão Pro inicializado com sucesso.');
 
   // Configurações de eventos
@@ -1056,7 +1056,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupReportButtons();
   setupNoteForm();
 
-  // Carrega opções e dados diretamente sem bloqueio de senha
-  await syncModelsAndSellers();
+  // 1. Carrega imediatamente o Dashboard da tela inicial sem travar a interface
   loadDashboard();
-});
+
+  // 2. Carrega opções dos selects de modelos e vendedores em segundo plano
+  syncModelsAndSellers();
+}
+
+// Garante execução imediata mesmo se o documento já estiver pronto (evita tela zerada)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
