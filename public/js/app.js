@@ -416,7 +416,17 @@ async function loadDashboard() {
 
     // Atualiza cards de KPIs
     document.getElementById('kpi-revenue').textContent = formatBRL(kpis.total_revenue);
-    document.getElementById('kpi-sales-count').textContent = `${kpis.sales_count} venda${kpis.sales_count !== 1 ? 's' : ''}`;
+    document.getElementById('kpi-sales-count').textContent = `${kpis.sales_count} venda${kpis.sales_count !== 1 ? 's' : ''} paga${kpis.sales_count !== 1 ? 's' : ''}`;
+
+    // KPI de Valores Pendentes / A Receber (separado do faturamento realizado)
+    const pendingRevEl = document.getElementById('kpi-pending-revenue');
+    const pendingCountEl = document.getElementById('kpi-pending-count');
+    if (pendingRevEl) pendingRevEl.textContent = formatBRL(kpis.pending_revenue || 0);
+    if (pendingCountEl) {
+      const pCount = kpis.pending_count || 0;
+      const pPlaques = kpis.pending_plaques || 0;
+      pendingCountEl.textContent = `${pCount} pedido${pCount !== 1 ? 's' : ''} (${pPlaques} placa${pPlaques !== 1 ? 's' : ''})`;
+    }
     
     document.getElementById('kpi-plaques-sold').textContent = kpis.plaques_sold;
     document.getElementById('kpi-ticket-unit').textContent = formatBRL(kpis.average_ticket_unit);

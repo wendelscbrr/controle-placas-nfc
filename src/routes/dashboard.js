@@ -84,24 +84,29 @@ router.get('/', async (req, res) => {
     const expensesParams = [];
 
     if (startDate) {
-      salesWhere += ' AND date >= ?';
+      salesWhere += ' AND s.date >= ?';
       expensesWhere += ' AND date >= ?';
       salesParams.push(startDate);
       expensesParams.push(startDate);
     }
     if (endDate) {
-      salesWhere += ' AND date <= ?';
+      salesWhere += ' AND s.date <= ?';
       expensesWhere += ' AND date <= ?';
       salesParams.push(endDate);
       expensesParams.push(endDate);
     }
 
+    const paidSalesWhere = `${salesWhere} AND COALESCE(s.status, 'pago') = 'pago'`;
+    const pendingSalesWhere = `${salesWhere} AND s.status = 'pendente'`;
+
     const isYearOrAll = period === 'year' || period === 'all';
-    const dateFormatSql = isYearOrAll ? "strftime('%Y-%m', date)" : 'date';
+    const salesDateFormatSql = isYearOrAll ? "strftime('%Y-%m', s.date)" : 's.date';
+    const expensesDateFormatSql = isYearOrAll ? "strftime('%Y-%m', date)" : 'date';
 
     // Executa as consultas do Dashboard em paralelo para máxima performance
     const [
       salesSummary,
+      pendingSummary,
       expensesSummary,
       bestModel,
       bestSeller,
@@ -110,14 +115,24 @@ router.get('/', async (req, res) => {
       salesTimeline,
       expensesTimeline
     ] = await Promise.all([
-      // 1. Resumo de Vendas
+      // 1. Resumo de Vendas Pagas (Faturamento Efetivo)
       db.get(`
         SELECT 
-          COUNT(id) as total_sales_count,
-          COALESCE(SUM(quantity), 0) as total_plaques_sold,
-          COALESCE(SUM(total_price), 0) as total_revenue
-        FROM sales
-        ${salesWhere}
+          COUNT(s.id) as total_sales_count,
+          COALESCE(SUM(s.quantity), 0) as total_plaques_sold,
+          COALESCE(SUM(s.total_price), 0) as total_revenue
+        FROM sales s
+        ${paidSalesWhere}
+      `, salesParams),
+
+      // 1B. Resumo de Vendas Pendentes (A Receber / Não Somadas no Faturamento)
+      db.get(`
+        SELECT 
+          COUNT(s.id) as pending_sales_count,
+          COALESCE(SUM(s.quantity), 0) as pending_plaques,
+          COALESCE(SUM(s.total_price), 0) as pending_revenue
+        FROM sales s
+        ${pendingSalesWhere}
       `, salesParams),
 
       // 2. Resumo de Gastos
@@ -129,7 +144,7 @@ router.get('/', async (req, res) => {
         ${expensesWhere}
       `, expensesParams),
 
-      // 3. Melhor Modelo
+      // 3. Melhor Modelo (Apenas Vendas Pagas)
       db.get(`
         SELECT 
           m.name as model_name,
@@ -137,13 +152,13 @@ router.get('/', async (req, res) => {
           SUM(s.total_price) as total_amount
         FROM sales s
         JOIN models m ON s.model_id = m.id
-        ${salesWhere}
+        ${paidSalesWhere}
         GROUP BY s.model_id
         ORDER BY total_quantity DESC, total_amount DESC
         LIMIT 1
       `, salesParams),
 
-      // 4. Melhor Vendedor
+      // 4. Melhor Vendedor (Apenas Vendas Pagas)
       db.get(`
         SELECT 
           sel.name as seller_name,
@@ -152,13 +167,13 @@ router.get('/', async (req, res) => {
           SUM(s.total_price) as total_amount
         FROM sales s
         JOIN sellers sel ON s.seller_id = sel.id
-        ${salesWhere}
+        ${paidSalesWhere}
         GROUP BY s.seller_id
         ORDER BY total_amount DESC
         LIMIT 1
       `, salesParams),
 
-      // 5. Participação de Cada Sócio / Vendedor
+      // 5. Participação de Cada Sócio / Vendedor (Apenas Vendas Pagas)
       db.all(`
         SELECT 
           sel.id,
@@ -168,6 +183,7 @@ router.get('/', async (req, res) => {
           COALESCE(SUM(s.total_price), 0) as total_amount
         FROM sellers sel
         LEFT JOIN sales s ON sel.id = s.seller_id 
+          AND COALESCE(s.status, 'pago') = 'pago'
           ${startDate ? 'AND s.date >= ?' : ''} 
           ${endDate ? 'AND s.date <= ?' : ''}
         WHERE sel.is_active = 1
@@ -175,7 +191,7 @@ router.get('/', async (req, res) => {
         ORDER BY total_amount DESC
       `, salesParams),
 
-      // 6. Distribuição por Modelo
+      // 6. Distribuição por Modelo (Apenas Vendas Pagas)
       db.all(`
         SELECT 
           m.name,
@@ -183,6 +199,7 @@ router.get('/', async (req, res) => {
           COALESCE(SUM(s.total_price), 0) as total_revenue
         FROM models m
         LEFT JOIN sales s ON m.id = s.model_id
+          AND COALESCE(s.status, 'pago') = 'pago'
           ${startDate ? 'AND s.date >= ?' : ''} 
           ${endDate ? 'AND s.date <= ?' : ''}
         WHERE m.is_active = 1
@@ -190,13 +207,13 @@ router.get('/', async (req, res) => {
         ORDER BY total_revenue DESC
       `, salesParams),
 
-      // 7. Timeline de Vendas
+      // 7. Timeline de Vendas (Apenas Vendas Pagas)
       db.all(`
         SELECT 
-          ${dateFormatSql} as time_point,
-          COALESCE(SUM(total_price), 0) as sales_total
-        FROM sales
-        ${salesWhere}
+          ${salesDateFormatSql} as time_point,
+          COALESCE(SUM(s.total_price), 0) as sales_total
+        FROM sales s
+        ${paidSalesWhere}
         GROUP BY time_point
         ORDER BY time_point ASC
       `, salesParams),
@@ -204,7 +221,7 @@ router.get('/', async (req, res) => {
       // 8. Timeline de Gastos
       db.all(`
         SELECT 
-          ${dateFormatSql} as time_point,
+          ${expensesDateFormatSql} as time_point,
           COALESCE(SUM(total_cost), 0) as expenses_total
         FROM expenses
         ${expensesWhere}
@@ -217,6 +234,10 @@ router.get('/', async (req, res) => {
     const plaquesSold = salesSummary ? salesSummary.total_plaques_sold || 0 : 0;
     const salesCount = salesSummary ? salesSummary.total_sales_count || 0 : 0;
     const totalExpenses = expensesSummary ? expensesSummary.total_expenses || 0 : 0;
+
+    const pendingRevenue = pendingSummary ? pendingSummary.pending_revenue || 0 : 0;
+    const pendingCount = pendingSummary ? pendingSummary.pending_sales_count || 0 : 0;
+    const pendingPlaques = pendingSummary ? pendingSummary.pending_plaques || 0 : 0;
 
     const averageTicketPerSale = salesCount > 0 ? (totalRevenue / salesCount) : 0;
     const averageTicketPerUnit = plaquesSold > 0 ? (totalRevenue / plaquesSold) : 0;
@@ -256,6 +277,9 @@ router.get('/', async (req, res) => {
         total_expenses: Number(totalExpenses.toFixed(2)),
         net_profit: Number(netProfit.toFixed(2)),
         profit_margin: Number(profitMargin.toFixed(1)),
+        pending_revenue: Number(pendingRevenue.toFixed(2)),
+        pending_count: pendingCount,
+        pending_plaques: pendingPlaques,
         best_model: bestModel ? {
           name: bestModel.model_name,
           units: bestModel.total_quantity,

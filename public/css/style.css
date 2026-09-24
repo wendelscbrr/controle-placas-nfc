@@ -282,7 +282,7 @@ body {
 
 @media (min-width: 1100px) {
   .kpi-grid {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   }
 }
 

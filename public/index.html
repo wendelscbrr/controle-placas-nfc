@@ -133,7 +133,7 @@
 
         <!-- Grade de Indicadores (KPIs) -->
         <div class="kpi-grid">
-          <!-- Total Vendas -->
+          <!-- Total Vendas (Pagas) -->
           <div class="card">
             <div class="card-accent-top card-accent-cyan"></div>
             <div class="kpi-header">
@@ -141,7 +141,18 @@
               <span class="kpi-icon">💰</span>
             </div>
             <div id="kpi-revenue" class="kpi-value">R$ 0,00</div>
-            <span id="kpi-sales-count" class="kpi-detail">0 transações</span>
+            <span id="kpi-sales-count" class="kpi-detail">0 vendas pagas</span>
+          </div>
+
+          <!-- Valores Pendentes / A Receber (Não somados no faturamento) -->
+          <div class="card">
+            <div class="card-accent-top card-accent-amber"></div>
+            <div class="kpi-header">
+              <span class="kpi-title">A Receber</span>
+              <span class="kpi-icon">⏳</span>
+            </div>
+            <div id="kpi-pending-revenue" class="kpi-value" style="color: var(--accent-amber);">R$ 0,00</div>
+            <span id="kpi-pending-count" class="kpi-detail">0 pedidos pendentes</span>
           </div>
 
           <!-- Total Placas Vendidas -->
