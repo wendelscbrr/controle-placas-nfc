@@ -64,6 +64,10 @@
           <span class="icon">📈</span>
           <span>Relatórios</span>
         </button>
+        <button class="nav-link" data-tab="anotacoes">
+          <span class="icon">📝</span>
+          <span>Anotações</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center;">
@@ -424,6 +428,25 @@
         </div>
       </section>
 
+      <!-- ========================================== -->
+      <!-- ABA 7: ANOTAÇÕES                           -->
+      <!-- ========================================== -->
+      <section id="tab-anotacoes" class="tab-content" aria-labelledby="title-anotacoes">
+        <div class="section-header">
+          <div>
+            <h2 id="title-anotacoes" class="section-title">Bloco de Anotações</h2>
+            <p class="section-subtitle">Espaço para lembretes em várias linhas, ideias, listas de tarefas e avisos entre os sócios.</p>
+          </div>
+          <button id="btn-open-modal-note" class="btn btn-primary">
+            + Nova Anotação
+          </button>
+        </div>
+
+        <div id="notes-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+          <!-- Cards de anotações renderizados dinamicamente -->
+        </div>
+      </section>
+
     </main>
 
     <!-- NAVEGAÇÃO INFERIOR MOBILE -->
@@ -447,6 +470,10 @@
       <button class="nav-link" data-tab="socios">
         <span class="icon">👥</span>
         <span>Sócios</span>
+      </button>
+      <button class="nav-link" data-tab="anotacoes">
+        <span class="icon">📝</span>
+        <span>Notas</span>
       </button>
     </nav>
   </div>
@@ -649,6 +676,48 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-close-modal="modal-seller">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Pessoa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Modal de Anotação (Multi-linhas) -->
+  <div id="modal-note" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-note-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-note-title">Nova Anotação</h3>
+        <button class="modal-close" data-close-modal="modal-note" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-note">
+        <input type="hidden" id="note-id">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="note-title" class="form-label">Título da Anotação (opcional)</label>
+              <input type="text" id="note-title" class="form-control" placeholder="Ex: Lembrete de compras, Ideias...">
+            </div>
+            <div class="form-group">
+              <label for="note-author" class="form-label">Autor / Responsável</label>
+              <select id="note-author" class="form-control">
+                <option value="Geral">Geral</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="note-content" class="form-label">Conteúdo da Anotação (várias linhas) *</label>
+            <textarea 
+              id="note-content" 
+              class="form-control" 
+              rows="8" 
+              placeholder="Digite suas anotações aqui em várias linhas...&#10;- Item 1&#10;- Item 2&#10;- Fornecedor X&#10;- Avisar cliente Y"
+              style="font-family: var(--font-main); line-height: 1.6; resize: vertical;"
+              required
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-note">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Anotação</button>
         </div>
       </form>
     </div>

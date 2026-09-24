@@ -206,5 +206,40 @@ const API = {
     const res = await this.request(`/api/reports/sales?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao gerar relatórios');
     return res.json();
+  },
+
+  // 7. Bloco de Anotações
+  async getNotes() {
+    const res = await this.request('/api/notes');
+    if (!res.ok) throw new Error('Falha ao carregar anotações');
+    return res.json();
+  },
+
+  async createNote(data) {
+    const res = await this.request('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erro ao salvar anotação');
+    return result;
+  },
+
+  async updateNote(id, data) {
+    const res = await this.request(`/api/notes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erro ao atualizar anotação');
+    return result;
+  },
+
+  async deleteNote(id) {
+    const res = await this.request(`/api/notes/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Erro ao excluir anotação');
+    return res.json();
   }
 };

@@ -16,6 +16,7 @@ const expensesRouter = require('./routes/expenses');
 const salesRouter = require('./routes/sales');
 const dashboardRouter = require('./routes/dashboard');
 const reportsRouter = require('./routes/reports');
+const notesRouter = require('./routes/notes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +41,7 @@ app.use('/api/expenses', expensesRouter);
 app.use('/api/sales', salesRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/notes', notesRouter);
 
 // Rota de fallback padrão para servir a aplicação (SPA) compatível com Express 5
 app.use((req, res) => {

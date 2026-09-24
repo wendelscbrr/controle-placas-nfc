@@ -74,6 +74,18 @@ function initDatabase() {
     );
   `);
 
+  // 5. Tabela de Anotações dos Sócios
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      content TEXT NOT NULL,
+      author TEXT DEFAULT 'Geral',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Inserção dos dados iniciais caso as tabelas estejam vazias (Seeds)
   seedInitialData();
 }

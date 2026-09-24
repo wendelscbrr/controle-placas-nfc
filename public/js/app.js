@@ -14,7 +14,8 @@ const state = {
   models: [],
   sellers: [],
   sales: [],
-  expenses: []
+  expenses: [],
+  notes: []
 };
 
 // =============================================================================
@@ -114,6 +115,12 @@ function setupModalListeners() {
     openModal('modal-model');
   });
   document.getElementById('btn-open-modal-seller')?.addEventListener('click', () => openModal('modal-seller'));
+  document.getElementById('btn-open-modal-note')?.addEventListener('click', () => {
+    document.getElementById('modal-note-title').textContent = 'Nova Anotação';
+    document.getElementById('note-id').value = '';
+    document.getElementById('form-note')?.reset();
+    openModal('modal-note');
+  });
 }
 
 // =============================================================================
@@ -170,6 +177,9 @@ function loadDataForTab(tabId) {
     case 'relatorios':
       loadReports();
       break;
+    case 'anotacoes':
+      loadNotes();
+      break;
   }
 }
 
@@ -204,6 +214,12 @@ async function syncModelsAndSellers() {
     if (filterSellerSelect) {
       filterSellerSelect.innerHTML = '<option value="all">Todos os Vendedores</option>' + 
         sellers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    }
+
+    const noteAuthorSelect = document.getElementById('note-author');
+    if (noteAuthorSelect) {
+      noteAuthorSelect.innerHTML = '<option value="Geral">Geral</option>' + 
+        sellers.filter(s => s.is_active).map(s => `<option value="${s.name}">${s.name}</option>`).join('');
     }
   } catch (error) {
     console.error('Erro ao sincronizar cadastros:', error);
@@ -856,17 +872,105 @@ async function loadReports() {
   }
 }
 
-function setupReportButtons() {
-  const btns = document.querySelectorAll('.report-group-btn');
-  btns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      btns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.reportGroup = btn.getAttribute('data-group');
-      loadReports();
-    });
+// =============================================================================
+// MÓDULO: ANOTAÇÕES DOS SÓCIOS (MULTI-LINHAS)
+// =============================================================================
+async function loadNotes() {
+  try {
+    const notes = await API.getNotes();
+    state.notes = notes;
+
+    const container = document.getElementById('notes-cards-grid');
+    if (!container) return;
+
+    if (notes.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; color: var(--text-dim); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle);">
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📝</div>
+          <h3 style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 0.35rem;">Nenhuma anotação ainda</h3>
+          <p style="font-size: 0.85rem; margin-bottom: 1.25rem;">Use este espaço para anotar ideias de placas, recados, contatos de fornecedores e tarefas.</p>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('btn-open-modal-note').click()">+ Criar Primeira Anotação</button>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = notes.map(note => `
+      <div class="note-card">
+        <div class="card-accent-top card-accent-cyan"></div>
+        <div class="note-header">
+          <h3 class="note-title">${note.title || 'Sem Título'}</h3>
+          <span class="badge badge-indigo">${note.author || 'Geral'}</span>
+        </div>
+        <div class="note-content-box">${note.content}</div>
+        <div class="note-footer">
+          <span>🕒 ${formatDate(note.created_at ? note.created_at.split(' ')[0] : '')}</span>
+          <div class="note-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editNoteItem(${note.id})">Editar</button>
+            <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteNoteItem(${note.id})" title="Excluir Anotação">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Erro ao carregar anotações:', error);
+    showToast('Falha ao listar anotações.', 'error');
+  }
+}
+
+function setupNoteForm() {
+  const form = document.getElementById('form-note');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('note-id').value;
+    const data = {
+      title: document.getElementById('note-title').value,
+      author: document.getElementById('note-author').value,
+      content: document.getElementById('note-content').value
+    };
+
+    try {
+      if (id) {
+        await API.updateNote(id, data);
+        showToast('Anotação atualizada!');
+      } else {
+        await API.createNote(data);
+        showToast('📝 Anotação salva com sucesso!');
+      }
+
+      closeModal('modal-note');
+      loadNotes();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   });
 }
+
+window.editNoteItem = function(id) {
+  const note = state.notes.find(n => n.id === id);
+  if (!note) return;
+
+  document.getElementById('modal-note-title').textContent = 'Editar Anotação';
+  document.getElementById('note-id').value = note.id;
+  document.getElementById('note-title').value = note.title || '';
+  document.getElementById('note-author').value = note.author || 'Geral';
+  document.getElementById('note-content').value = note.content || '';
+
+  openModal('modal-note');
+};
+
+window.deleteNoteItem = async function(id) {
+  if (confirm('Deseja realmente excluir esta anotação?')) {
+    try {
+      await API.deleteNote(id);
+      showToast('Anotação excluída.');
+      loadNotes();
+    } catch (error) {
+      showToast('Erro ao remover anotação.', 'error');
+    }
+  }
+};
 
 // =============================================================================
 // MÓDULO: AUTENTICAÇÃO E TELA DE BLOQUEIO (PIN / SENHA)
@@ -960,6 +1064,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupModelForm();
   setupSellerForm();
   setupReportButtons();
+  setupNoteForm();
 
   // Inicializa autenticação com senha 'coxinha'
   const isAuth = setupAuth();
