@@ -23,6 +23,9 @@
         <button id="btn-quick-sale-mobile" class="btn btn-primary btn-sm" aria-label="Nova Venda Rápida">
           + Venda
         </button>
+        <button id="btn-lock-mobile" class="btn-lock" title="Bloquear Sistema" aria-label="Bloquear Sistema">
+          🔒
+        </button>
       </div>
     </header>
 
@@ -63,9 +66,14 @@
         </button>
       </nav>
 
-      <div class="sidebar-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--text-dim);">
-        <p>Sistema Ativo v1.0</p>
-        <p>Base: SQLite Nativo</p>
+      <div class="sidebar-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <p>Sistema Ativo v1.0</p>
+          <p>Base: SQLite Nativo</p>
+        </div>
+        <button id="btn-lock-desktop" class="btn-lock" title="Bloquear Sistema">
+          🔒 Bloquear
+        </button>
       </div>
     </aside>
 
@@ -642,6 +650,41 @@
           <button type="button" class="btn btn-secondary" data-close-modal="modal-seller">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Pessoa</button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- TELA DE BLOQUEIO / PIN DE ACESSO EXCLUSIVO                                 -->
+  <!-- ========================================================================== -->
+  <div id="auth-overlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="auth-card">
+      <div class="auth-icon-wrap" aria-hidden="true">
+        🔒
+      </div>
+      <h2 id="auth-title" class="auth-title">Acesso Restrito</h2>
+      <p class="auth-subtitle">Digite a senha da empresa para desbloquear o painel comercial.</p>
+
+      <form id="form-auth">
+        <div id="auth-error-msg" class="auth-error" role="alert"></div>
+
+        <div class="form-group" style="text-align: left; margin-bottom: 1.25rem;">
+          <label for="auth-password" class="form-label">Senha / PIN de Acesso</label>
+          <input 
+            type="password" 
+            id="auth-password" 
+            class="form-control" 
+            placeholder="Digite a senha..." 
+            autocomplete="current-password"
+            style="font-size: 1rem; padding: 0.75rem 1rem; text-align: center; letter-spacing: 0.1em;"
+            required
+            autofocus
+          >
+        </div>
+
+        <button type="submit" id="btn-submit-auth" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 0.95rem;">
+          ⚡ Desbloquear Painel
+        </button>
       </form>
     </div>
   </div>

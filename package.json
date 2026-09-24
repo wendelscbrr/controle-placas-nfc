@@ -1,8 +1,11 @@
 {
-  "name": "testando-o-gemini",
+  "name": "controle-placas-nfc",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Sistema de gestão comercial e financeira de placas NFC",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",

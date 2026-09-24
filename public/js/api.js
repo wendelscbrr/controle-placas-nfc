@@ -1,14 +1,69 @@
 // public/js/api.js
-// Camada de comunicação assíncrona com a API REST (Fetch API)
+// Camada de comunicação assíncrona com a API REST (Fetch API) com Autenticação Centralizada
+
+const AUTH_KEY = 'nfc_auth_token';
+
+/**
+ * Retorna os headers necessários para a requisição, incluindo o Bearer Token de autenticação
+ */
+function getAuthHeaders(extraHeaders = {}) {
+  const token = localStorage.getItem(AUTH_KEY);
+  const headers = { ...extraHeaders };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 const API = {
+  /**
+   * Wrapper centralizado para todas as chamadas HTTP.
+   * Injeta o token e detecta se o acesso foi negado (401), acionando o bloqueio de tela.
+   */
+  async request(url, options = {}) {
+    const headers = getAuthHeaders(options.headers || {});
+    const res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+      localStorage.removeItem(AUTH_KEY);
+      window.dispatchEvent(new CustomEvent('auth:required'));
+      throw new Error('Acesso bloqueado. Senha necessária.');
+    }
+
+    return res;
+  },
+
+  // Autenticação
+  async verifyPassword(password) {
+    const res = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Senha incorreta.');
+    
+    // Salva o token localmente para manter a sessão aberta
+    localStorage.setItem(AUTH_KEY, data.token);
+    return data;
+  },
+
+  logout() {
+    localStorage.removeItem(AUTH_KEY);
+    window.dispatchEvent(new CustomEvent('auth:required'));
+  },
+
+  isAuthenticated() {
+    return !!localStorage.getItem(AUTH_KEY);
+  },
+
   // 1. Dashboard & Indicadores
   async getDashboard(period = 'all', startDate = '', endDate = '') {
     const params = new URLSearchParams({ period });
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
 
-    const res = await fetch(`/api/dashboard?${params.toString()}`);
+    const res = await this.request(`/api/dashboard?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao carregar dados do dashboard');
     return res.json();
   },
@@ -22,13 +77,13 @@ const API = {
     if (filters.model_id) params.append('model_id', filters.model_id);
     if (filters.search) params.append('search', filters.search);
 
-    const res = await fetch(`/api/sales?${params.toString()}`);
+    const res = await this.request(`/api/sales?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao carregar vendas');
     return res.json();
   },
 
   async createSale(data) {
-    const res = await fetch('/api/sales', {
+    const res = await this.request('/api/sales', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -39,7 +94,7 @@ const API = {
   },
 
   async deleteSale(id) {
-    const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' });
+    const res = await this.request(`/api/sales/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir venda');
     return res.json();
   },
@@ -51,7 +106,7 @@ const API = {
     if (filters.endDate) params.append('endDate', filters.endDate);
     if (filters.category) params.append('category', filters.category);
 
-    const res = await fetch(`/api/expenses?${params.toString()}`);
+    const res = await this.request(`/api/expenses?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao carregar gastos');
     return res.json();
   },
@@ -61,13 +116,13 @@ const API = {
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
 
-    const res = await fetch(`/api/expenses/summary?${params.toString()}`);
+    const res = await this.request(`/api/expenses/summary?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao carregar resumo de despesas');
     return res.json();
   },
 
   async createExpense(data) {
-    const res = await fetch('/api/expenses', {
+    const res = await this.request('/api/expenses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -78,20 +133,20 @@ const API = {
   },
 
   async deleteExpense(id) {
-    const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+    const res = await this.request(`/api/expenses/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir gasto');
     return res.json();
   },
 
   // 4. Modelos de Placas
   async getModels(all = true) {
-    const res = await fetch(`/api/models?all=${all}`);
+    const res = await this.request(`/api/models?all=${all}`);
     if (!res.ok) throw new Error('Falha ao buscar modelos');
     return res.json();
   },
 
   async createModel(data) {
-    const res = await fetch('/api/models', {
+    const res = await this.request('/api/models', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -102,7 +157,7 @@ const API = {
   },
 
   async updateModel(id, data) {
-    const res = await fetch(`/api/models/${id}`, {
+    const res = await this.request(`/api/models/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -113,20 +168,20 @@ const API = {
   },
 
   async deleteModel(id) {
-    const res = await fetch(`/api/models/${id}`, { method: 'DELETE' });
+    const res = await this.request(`/api/models/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir modelo');
     return res.json();
   },
 
   // 5. Sócios e Vendedores
   async getSellers(all = true) {
-    const res = await fetch(`/api/sellers?all=${all}`);
+    const res = await this.request(`/api/sellers?all=${all}`);
     if (!res.ok) throw new Error('Falha ao buscar sócios');
     return res.json();
   },
 
   async createSeller(data) {
-    const res = await fetch('/api/sellers', {
+    const res = await this.request('/api/sellers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -137,7 +192,7 @@ const API = {
   },
 
   async deleteSeller(id) {
-    const res = await fetch(`/api/sellers/${id}`, { method: 'DELETE' });
+    const res = await this.request(`/api/sellers/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao remover sócio/vendedor');
     return res.json();
   },
@@ -148,7 +203,7 @@ const API = {
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
 
-    const res = await fetch(`/api/reports/sales?${params.toString()}`);
+    const res = await this.request(`/api/reports/sales?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao gerar relatórios');
     return res.json();
   }
