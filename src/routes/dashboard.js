@@ -58,6 +58,10 @@ function resolveDateRange(period, customStart, customEnd) {
 // GET /api/dashboard - Indicadores consolidados e dados para gráficos
 router.get('/', (req, res) => {
   try {
+    // Sincroniza vendas pendentes cuja data já chegou
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    db.prepare("UPDATE sales SET status = 'pago' WHERE status = 'pendente' AND date <= ?").run(todayStr);
+
     const { period, startDate: customStart, endDate: customEnd } = req.query;
     const { startDate, endDate, label } = resolveDateRange(period, customStart, customEnd);
 

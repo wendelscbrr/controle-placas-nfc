@@ -67,12 +67,21 @@ function initDatabase() {
       total_price REAL NOT NULL,
       seller_id INTEGER NOT NULL,
       payment_method TEXT NOT NULL,
+      status TEXT DEFAULT 'pago',
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (model_id) REFERENCES models (id),
       FOREIGN KEY (seller_id) REFERENCES sellers (id)
     );
   `);
+
+  // Migração segura: adiciona a coluna status caso o banco já tenha sido criado anteriormente
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN status TEXT DEFAULT 'pago';");
+    console.log("✔ Migração: coluna 'status' adicionada com sucesso à tabela de vendas.");
+  } catch (e) {
+    // A coluna já existe no banco, prossegue normalmente
+  }
 
   // 5. Tabela de Anotações dos Sócios
   db.exec(`

@@ -74,6 +74,9 @@ function openModal(modalId) {
     if (dateInput && !dateInput.value) {
       dateInput.value = new Date().toISOString().split('T')[0];
     }
+    if (modalId === 'modal-sale') {
+      updateSaleDateStatusHint();
+    }
   }
 }
 
@@ -442,37 +445,73 @@ function setupPeriodFilters() {
 // =============================================================================
 // MÓDULO: VENDAS
 // =============================================================================
+
+/**
+ * Atualiza o aviso visual do status no modal de venda com base na data informada
+ */
+function updateSaleDateStatusHint() {
+  const dateInput = document.getElementById('sale-date');
+  const hintEl = document.getElementById('sale-status-hint');
+  if (!dateInput || !hintEl) return;
+
+  const selectedDate = dateInput.value;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+
+  if (selectedDate && selectedDate > today) {
+    hintEl.className = 'sale-status-hint is-pending';
+    hintEl.innerHTML = `
+      <span>⏳</span>
+      <span>Data futura (<strong>${formatDate(selectedDate)}</strong>): Esta venda será gravada como <strong style="color: #fbbf24;">PENDENTE</strong> e mudará automaticamente para <strong style="color: #34d399;">PAGO</strong> quando chegar o dia.</span>
+    `;
+  } else {
+    hintEl.className = 'sale-status-hint is-paid';
+    hintEl.innerHTML = `
+      <span>✓</span>
+      <span>Data atual/passada (<strong>${formatDate(selectedDate || today)}</strong>): Esta venda será gravada como <strong style="color: #34d399;">PAGO</strong>.</span>
+    `;
+  }
+}
+
 async function loadSales() {
   try {
     const search = document.getElementById('filter-sales-search')?.value || '';
     const seller_id = document.getElementById('filter-sales-seller')?.value || 'all';
+    const status = document.getElementById('filter-sales-status')?.value || 'all';
 
-    const sales = await API.getSales({ search, seller_id });
+    const sales = await API.getSales({ search, seller_id, status });
     state.sales = sales;
 
     const tbody = document.getElementById('sales-table-body');
     if (!tbody) return;
 
     if (sales.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">Nenhuma venda encontrada.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-dim); padding: 2rem;">Nenhuma venda encontrada.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = sales.map(sale => `
-      <tr>
-        <td>${formatDate(sale.date)}</td>
-        <td><strong>${sale.customer_name}</strong></td>
-        <td><span class="badge badge-cyan">${sale.model_name || 'Personalizado'}</span></td>
-        <td><strong>${sale.quantity}</strong></td>
-        <td>${formatBRL(sale.unit_price)}</td>
-        <td><strong style="color: var(--accent-emerald); font-family: var(--font-mono);">${formatBRL(sale.total_price)}</strong></td>
-        <td><span class="badge badge-indigo">${sale.seller_name || 'Não informado'}</span></td>
-        <td><span class="badge badge-amber">${sale.payment_method}</span></td>
-        <td style="text-align: right;">
-          <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteSaleItem(${sale.id})" title="Excluir Venda">🗑️</button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = sales.map(sale => {
+      const isPending = (sale.status || '').toLowerCase() === 'pendente';
+      const statusBadge = isPending
+        ? `<span class="badge badge-status-pending" title="Venda com data futura. Ficará paga automaticamente quando o dia chegar.">⏳ PENDENTE</span>`
+        : `<span class="badge badge-status-paid" title="Venda liquidada/paga">✓ PAGO</span>`;
+
+      return `
+        <tr>
+          <td>${formatDate(sale.date)}</td>
+          <td><strong>${sale.customer_name}</strong></td>
+          <td><span class="badge badge-cyan">${sale.model_name || 'Personalizado'}</span></td>
+          <td><strong>${sale.quantity}</strong></td>
+          <td>${formatBRL(sale.unit_price)}</td>
+          <td><strong style="color: var(--accent-emerald); font-family: var(--font-mono);">${formatBRL(sale.total_price)}</strong></td>
+          <td><span class="badge badge-indigo">${sale.seller_name || 'Não informado'}</span></td>
+          <td><span class="badge badge-amber">${sale.payment_method}</span></td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">
+            <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteSaleItem(${sale.id})" title="Excluir Venda">🗑️</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   } catch (error) {
     console.error('Erro ao carregar vendas:', error);
     showToast('Falha ao listar vendas.', 'error');
@@ -497,9 +536,10 @@ function setupSaleForm() {
     };
 
     try {
-      await API.createSale(data);
+      const res = await API.createSale(data);
       closeModal('modal-sale');
-      showToast('🎉 Venda registrada com sucesso!');
+      const isPending = res.status === 'pendente';
+      showToast(isPending ? '⏳ Venda futura registrada como PENDENTE!' : '🎉 Venda registrada com sucesso como PAGA!');
       loadSales();
       if (state.currentTab === 'dashboard') loadDashboard();
     } catch (error) {
@@ -507,9 +547,15 @@ function setupSaleForm() {
     }
   });
 
+  // Atualiza dica de status ao mudar a data da venda
+  const saleDateInput = document.getElementById('sale-date');
+  saleDateInput?.addEventListener('input', updateSaleDateStatusHint);
+  saleDateInput?.addEventListener('change', updateSaleDateStatusHint);
+
   // Filtros em tempo real na listagem de vendas
   document.getElementById('filter-sales-search')?.addEventListener('input', loadSales);
   document.getElementById('filter-sales-seller')?.addEventListener('change', loadSales);
+  document.getElementById('filter-sales-status')?.addEventListener('change', loadSales);
 }
 
 // Excluir venda

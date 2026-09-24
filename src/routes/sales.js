@@ -5,10 +5,39 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
-// GET /api/sales - Listar vendas com detalhes do modelo e vendedor
+/**
+ * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
+ */
+function getTodayDateStr() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' });
+  return formatter.format(now);
+}
+
+/**
+ * Sincroniza automaticamente o status das vendas pendentes:
+ * Se a data da venda chegou (date <= hoje), o status é atualizado para 'pago' e persistido no banco.
+ */
+function syncPendingSales() {
+  try {
+    const today = getTodayDateStr();
+    db.prepare(`
+      UPDATE sales 
+      SET status = 'pago' 
+      WHERE status = 'pendente' AND date <= ?
+    `).run(today);
+  } catch (err) {
+    console.error('Erro ao sincronizar status de vendas pendentes:', err);
+  }
+}
+
+// GET /api/sales - Listar vendas com detalhes do modelo, vendedor e status atualizado
 router.get('/', (req, res) => {
   try {
-    const { startDate, endDate, seller_id, model_id, search } = req.query;
+    // Sincroniza vendas pendentes cuja data chegou antes de listar
+    syncPendingSales();
+
+    const { startDate, endDate, seller_id, model_id, status, search } = req.query;
 
     let query = `
       SELECT 
@@ -23,6 +52,7 @@ router.get('/', (req, res) => {
         s.seller_id,
         sel.name AS seller_name,
         s.payment_method,
+        COALESCE(s.status, 'pago') AS status,
         s.notes,
         s.created_at
       FROM sales s
@@ -49,6 +79,10 @@ router.get('/', (req, res) => {
       query += ' AND s.model_id = ?';
       params.push(model_id);
     }
+    if (status && status !== 'all') {
+      query += ' AND s.status = ?';
+      params.push(status);
+    }
     if (search && search.trim() !== '') {
       query += ' AND (s.customer_name LIKE ? OR s.notes LIKE ?)';
       params.push(`%${search.trim()}%`, `%${search.trim()}%`);
@@ -64,7 +98,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/sales - Registrar nova venda
+// POST /api/sales - Registrar nova venda (com status automático: pendente para datas futuras, pago para hoje/passado)
 router.post('/', (req, res) => {
   try {
     const { 
@@ -100,12 +134,16 @@ router.post('/', (req, res) => {
 
     // Calcula valor total automaticamente
     const totalPrice = Number((qty * price).toFixed(2));
-    const saleDate = date || new Date().toISOString().split('T')[0];
+    const today = getTodayDateStr();
+    const saleDate = date || today;
+
+    // Regra de negócio solicitada: se data for futura, status é 'pendente'; senão 'pago'
+    const status = saleDate > today ? 'pendente' : 'pago';
 
     const stmt = db.prepare(`
       INSERT INTO sales (
-        date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        date, customer_name, model_id, quantity, unit_price, total_price, seller_id, payment_method, status, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -117,6 +155,7 @@ router.post('/', (req, res) => {
       totalPrice,
       parseInt(seller_id, 10),
       payment_method || 'PIX',
+      status,
       notes ? notes.trim() : ''
     );
 
@@ -151,6 +190,7 @@ router.put('/:id', (req, res) => {
       unit_price, 
       seller_id, 
       payment_method, 
+      status: customStatus,
       notes 
     } = req.body;
 
@@ -162,6 +202,14 @@ router.put('/:id', (req, res) => {
     const qty = quantity !== undefined ? parseInt(quantity, 10) : existing.quantity;
     const price = unit_price !== undefined ? parseFloat(unit_price) : existing.unit_price;
     const totalPrice = Number((qty * price).toFixed(2));
+    const targetDate = date || existing.date;
+    const today = getTodayDateStr();
+
+    // Se o status não for informado explicitamente, recalcula com base na data
+    let statusToSave = customStatus || existing.status || 'pago';
+    if (!customStatus && date) {
+      statusToSave = targetDate > today ? 'pendente' : 'pago';
+    }
 
     const stmt = db.prepare(`
       UPDATE sales SET
@@ -173,12 +221,13 @@ router.put('/:id', (req, res) => {
         total_price = ?,
         seller_id = ?,
         payment_method = ?,
+        status = ?,
         notes = ?
       WHERE id = ?
     `);
 
     stmt.run(
-      date || existing.date,
+      targetDate,
       customer_name !== undefined ? customer_name.trim() : existing.customer_name,
       model_id !== undefined ? parseInt(model_id, 10) : existing.model_id,
       qty,
@@ -186,6 +235,7 @@ router.put('/:id', (req, res) => {
       totalPrice,
       seller_id !== undefined ? parseInt(seller_id, 10) : existing.seller_id,
       payment_method !== undefined ? payment_method : existing.payment_method,
+      statusToSave,
       notes !== undefined ? notes.trim() : existing.notes,
       id
     );

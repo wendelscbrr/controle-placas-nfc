@@ -28,6 +28,7 @@ const API = {
     if (filters.endDate) params.append('endDate', filters.endDate);
     if (filters.seller_id) params.append('seller_id', filters.seller_id);
     if (filters.model_id) params.append('model_id', filters.model_id);
+    if (filters.status) params.append('status', filters.status);
     if (filters.search) params.append('search', filters.search);
 
     const res = await this.request(`/api/sales?${params.toString()}`);

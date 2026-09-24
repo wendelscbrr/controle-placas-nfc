@@ -614,6 +614,53 @@ tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .badge-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
 .badge-indigo { background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); }
 
+/* Badges específicos de Status de Venda (Pendente / Pago) */
+.badge-status-pending {
+  background: rgba(180, 83, 9, 0.22);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.3rem 0.65rem;
+}
+
+.badge-status-paid {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.12);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.3rem 0.65rem;
+}
+
+/* Caixa informativa de status no modal de vendas */
+.sale-status-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
+  transition: var(--transition);
+}
+
+.sale-status-hint.is-pending {
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.sale-status-hint.is-paid {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #a7f3d0;
+}
+
 /* ==========================================================================
    BOTÕES E AÇÕES
    ========================================================================== */

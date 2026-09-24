@@ -247,7 +247,7 @@
 
         <!-- Filtros e Busca de Vendas -->
         <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-          <div class="form-row">
+          <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
             <div>
               <label for="filter-sales-search" class="form-label">Buscar por Cliente</label>
               <input type="text" id="filter-sales-search" class="form-control" placeholder="Digite o nome do cliente...">
@@ -256,6 +256,14 @@
               <label for="filter-sales-seller" class="form-label">Filtrar por Vendedor</label>
               <select id="filter-sales-seller" class="form-control">
                 <option value="all">Todos os Vendedores</option>
+              </select>
+            </div>
+            <div>
+              <label for="filter-sales-status" class="form-label">Filtrar por Status</label>
+              <select id="filter-sales-status" class="form-control">
+                <option value="all">Todos os Status</option>
+                <option value="pago">✓ Apenas Pagos</option>
+                <option value="pendente">⏳ Apenas Pendentes</option>
               </select>
             </div>
           </div>
@@ -274,6 +282,7 @@
                 <th>Total</th>
                 <th>Vendedor</th>
                 <th>Pagamento</th>
+                <th>Status</th>
                 <th style="text-align: right;">Ações</th>
               </tr>
             </thead>
@@ -492,6 +501,12 @@
               <label for="sale-customer" class="form-label">Nome do Cliente / Empresa *</label>
               <input type="text" id="sale-customer" class="form-control" placeholder="Ex: Café Central" required>
             </div>
+          </div>
+
+          <!-- Dica visual do Status que será atribuído -->
+          <div id="sale-status-hint" class="sale-status-hint is-paid">
+            <span>✓</span>
+            <span id="sale-status-hint-text">Data atual/passada: esta venda será registrada como <strong>PAGO</strong>.</span>
           </div>
 
           <div class="form-row">
