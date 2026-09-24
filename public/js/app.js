@@ -102,6 +102,24 @@ function resetSaleModalForNew() {
   updateSaleDateStatusHint();
 }
 
+function resetExpenseModalForNew() {
+  const titleEl = document.getElementById('modal-expense-title');
+  if (titleEl) titleEl.textContent = 'Cadastrar Gasto / Material';
+  const idInput = document.getElementById('expense-id');
+  if (idInput) idInput.value = '';
+  const form = document.getElementById('form-expense');
+  if (form) form.reset();
+  const dateInput = document.getElementById('expense-date');
+  if (dateInput) {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    dateInput.value = today;
+  }
+  const btnSubmit = document.getElementById('btn-submit-expense');
+  if (btnSubmit) btnSubmit.textContent = 'Salvar Gasto';
+  const expenseCalcHint = document.getElementById('expense-calc-total');
+  if (expenseCalcHint) expenseCalcHint.textContent = 'Total Calculado: R$ 0,00';
+}
+
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
@@ -110,6 +128,9 @@ function closeModal(modalId) {
     if (form) form.reset();
     if (modalId === 'modal-sale') {
       resetSaleModalForNew();
+    }
+    if (modalId === 'modal-expense') {
+      resetExpenseModalForNew();
     }
   }
 }
@@ -145,7 +166,10 @@ function setupModalListeners() {
     resetSaleModalForNew();
     openModal('modal-sale');
   });
-  document.getElementById('btn-open-modal-expense')?.addEventListener('click', () => openModal('modal-expense'));
+  document.getElementById('btn-open-modal-expense')?.addEventListener('click', () => {
+    resetExpenseModalForNew();
+    openModal('modal-expense');
+  });
   document.getElementById('btn-open-modal-model')?.addEventListener('click', () => {
     document.getElementById('modal-model-title').textContent = 'Cadastrar Novo Modelo de Placa';
     document.getElementById('model-id').value = '';
@@ -765,8 +789,11 @@ async function loadExpenses() {
         <td><strong style="color: var(--accent-rose); font-family: var(--font-mono);">${formatBRL(exp.total_cost)}</strong></td>
         <td>${exp.supplier || '-'}</td>
         <td style="color: var(--text-dim); font-size: 0.8rem;">${exp.notes || '-'}</td>
-        <td style="text-align: right;">
-          <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteExpenseItem(${exp.id})" title="Excluir Gasto">🗑️</button>
+        <td style="text-align: right; white-space: nowrap;">
+          <div style="display: inline-flex; gap: 0.35rem; justify-content: flex-end;">
+            <button class="btn btn-secondary btn-sm btn-icon" onclick="editExpenseItem(${exp.id})" title="Editar Gasto">✏️</button>
+            <button class="btn btn-danger-outline btn-sm btn-icon" onclick="deleteExpenseItem(${exp.id})" title="Excluir Gasto">🗑️</button>
+          </div>
         </td>
       </tr>
     `).join('');
@@ -776,12 +803,13 @@ async function loadExpenses() {
   }
 }
 
-// Cadastrar novo gasto
+// Cadastrar ou editar gasto
 function setupExpenseForm() {
   const form = document.getElementById('form-expense');
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    const id = document.getElementById('expense-id')?.value;
     const data = {
       date: document.getElementById('expense-date').value,
       category: document.getElementById('expense-category').value,
@@ -793,9 +821,15 @@ function setupExpenseForm() {
     };
 
     try {
-      await API.createExpense(data);
-      closeModal('modal-expense');
-      showToast('📦 Gasto registrado com sucesso!');
+      if (id) {
+        await API.updateExpense(id, data);
+        closeModal('modal-expense');
+        showToast('✓ Gasto atualizado com sucesso!');
+      } else {
+        await API.createExpense(data);
+        closeModal('modal-expense');
+        showToast('📦 Gasto registrado com sucesso!');
+      }
       loadExpenses();
       if (state.currentTab === 'dashboard') loadDashboard();
     } catch (error) {
@@ -803,6 +837,47 @@ function setupExpenseForm() {
     }
   });
 }
+
+// Editar gasto existente
+window.editExpenseItem = async function(id) {
+  let exp = state.expenses?.find(e => e.id === id);
+  if (!exp) {
+    try {
+      const expenses = await API.getExpenses();
+      exp = expenses.find(e => e.id === id);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  if (!exp) {
+    showToast('Gasto não encontrado.', 'error');
+    return;
+  }
+
+  const titleEl = document.getElementById('modal-expense-title');
+  if (titleEl) titleEl.textContent = `Editar Gasto #${exp.id} - ${exp.item_name}`;
+
+  document.getElementById('expense-id').value = exp.id;
+  document.getElementById('expense-date').value = exp.date;
+  document.getElementById('expense-category').value = exp.category || 'Tags NFC';
+  document.getElementById('expense-item').value = exp.item_name;
+  document.getElementById('expense-qty').value = exp.quantity;
+  document.getElementById('expense-unit-cost').value = Number(exp.unit_cost).toFixed(2);
+  document.getElementById('expense-supplier').value = exp.supplier || '';
+  document.getElementById('expense-notes').value = exp.notes || '';
+
+  const btnSubmit = document.getElementById('btn-submit-expense');
+  if (btnSubmit) btnSubmit.textContent = 'Salvar Alterações';
+
+  const qty = parseFloat(exp.quantity) || 0;
+  const unitCost = parseFloat(exp.unit_cost) || 0;
+  const total = qty * unitCost;
+  const calcHint = document.getElementById('expense-calc-total');
+  if (calcHint) calcHint.textContent = `Total Calculado: ${formatBRL(total)}`;
+
+  openModal('modal-expense');
+};
 
 // Excluir gasto
 window.deleteExpenseItem = async function(id) {

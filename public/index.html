@@ -606,6 +606,7 @@
         <button class="modal-close" data-close-modal="modal-expense" aria-label="Fechar">&times;</button>
       </div>
       <form id="form-expense">
+        <input type="hidden" id="expense-id" value="">
         <div class="modal-body">
           <div class="form-row">
             <div class="form-group">
@@ -660,7 +661,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-close-modal="modal-expense">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar Gasto</button>
+          <button type="submit" id="btn-submit-expense" class="btn btn-primary">Salvar Gasto</button>
         </div>
       </form>
     </div>

@@ -97,6 +97,17 @@ const API = {
     return result;
   },
 
+  async updateExpense(id, data) {
+    const res = await this.request(`/api/expenses/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erro ao atualizar gasto');
+    return result;
+  },
+
   async deleteExpense(id) {
     const res = await this.request(`/api/expenses/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir gasto');
