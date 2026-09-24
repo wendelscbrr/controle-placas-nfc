@@ -817,6 +817,19 @@ tr:hover td { background: rgba(255, 255, 255, 0.02); }
   transition: var(--transition);
 }
 
+select.form-control {
+  color-scheme: dark;
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+select.form-control option {
+  background-color: #111827;
+  color: #f8fafc;
+  padding: 0.5rem;
+}
+
 .form-control:focus {
   outline: none;
   border-color: var(--accent-cyan);

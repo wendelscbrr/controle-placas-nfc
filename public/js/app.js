@@ -76,6 +76,7 @@ function openModal(modalId) {
     }
     if (modalId === 'modal-sale') {
       updateSaleDateStatusHint();
+      syncModelsAndSellers();
     }
   }
 }
@@ -190,6 +191,49 @@ function loadDataForTab(tabId) {
 // CARREGAMENTO E SINCRONIZAÇÃO DE MODELOS E SÓCIOS
 // =============================================================================
 async function syncModelsAndSellers() {
+  const modelSelect = document.getElementById('sale-model');
+  const sellerSelect = document.getElementById('sale-seller');
+  const filterSellerSelect = document.getElementById('filter-sales-seller');
+  const noteAuthorSelect = document.getElementById('note-author');
+
+  function renderSelectOptions(models, sellers) {
+    if (modelSelect && Array.isArray(models)) {
+      const currentModel = modelSelect.value;
+      const activeModels = models.filter(m => m.is_active == 1 || m.is_active === true || m.is_active === undefined);
+      modelSelect.innerHTML = '<option value="">Selecione o modelo...</option>' + 
+        activeModels.map(m => `<option value="${m.id}">${m.name} - ${formatBRL(m.base_price)}</option>`).join('');
+      if (currentModel) modelSelect.value = currentModel;
+    }
+
+    if (sellerSelect && Array.isArray(sellers)) {
+      const currentSeller = sellerSelect.value;
+      const activeSellers = sellers.filter(s => s.is_active == 1 || s.is_active === true || s.is_active === undefined);
+      sellerSelect.innerHTML = '<option value="">Selecione quem vendeu...</option>' + 
+        activeSellers.map(s => `<option value="${s.id}">${s.name} (${s.role || 'Sócio'})</option>`).join('');
+      if (currentSeller) sellerSelect.value = currentSeller;
+    }
+
+    if (filterSellerSelect && Array.isArray(sellers)) {
+      const currentFilter = filterSellerSelect.value;
+      filterSellerSelect.innerHTML = '<option value="all">Todos os Vendedores</option>' + 
+        sellers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      if (currentFilter) filterSellerSelect.value = currentFilter;
+    }
+
+    if (noteAuthorSelect && Array.isArray(sellers)) {
+      const currentAuthor = noteAuthorSelect.value;
+      noteAuthorSelect.innerHTML = '<option value="Geral">Geral</option>' + 
+        sellers.filter(s => s.is_active == 1 || s.is_active === true || s.is_active === undefined).map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+      if (currentAuthor) noteAuthorSelect.value = currentAuthor;
+    }
+  }
+
+  // 1. Se já tiver dados em cache no estado, renderiza de imediato
+  if (state.models?.length || state.sellers?.length) {
+    renderSelectOptions(state.models, state.sellers);
+  }
+
+  // 2. Busca dados frescos da API
   try {
     const [models, sellers] = await Promise.all([
       API.getModels(true),
@@ -199,31 +243,7 @@ async function syncModelsAndSellers() {
     state.models = models;
     state.sellers = sellers;
 
-    // Atualiza selects do formulário de Venda
-    const modelSelect = document.getElementById('sale-model');
-    const sellerSelect = document.getElementById('sale-seller');
-    const filterSellerSelect = document.getElementById('filter-sales-seller');
-
-    if (modelSelect) {
-      modelSelect.innerHTML = '<option value="">Selecione o modelo...</option>' + 
-        models.filter(m => m.is_active).map(m => `<option value="${m.id}">${m.name} - ${formatBRL(m.base_price)}</option>`).join('');
-    }
-
-    if (sellerSelect) {
-      sellerSelect.innerHTML = '<option value="">Selecione quem vendeu...</option>' + 
-        sellers.filter(s => s.is_active).map(s => `<option value="${s.id}">${s.name} (${s.role || 'Sócio'})</option>`).join('');
-    }
-
-    if (filterSellerSelect) {
-      filterSellerSelect.innerHTML = '<option value="all">Todos os Vendedores</option>' + 
-        sellers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    }
-
-    const noteAuthorSelect = document.getElementById('note-author');
-    if (noteAuthorSelect) {
-      noteAuthorSelect.innerHTML = '<option value="Geral">Geral</option>' + 
-        sellers.filter(s => s.is_active).map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-    }
+    renderSelectOptions(models, sellers);
   } catch (error) {
     console.error('Erro ao sincronizar cadastros:', error);
   }
@@ -245,9 +265,9 @@ function setupFormCalculations() {
 
   modelSelect?.addEventListener('change', () => {
     const selectedModelId = parseInt(modelSelect.value, 10);
-    const model = state.models.find(m => m.id === selectedModelId);
+    const model = state.models?.find(m => Number(m.id) === selectedModelId);
     if (model) {
-      priceInput.value = model.base_price.toFixed(2);
+      priceInput.value = Number(model.base_price).toFixed(2);
       updateSaleTotal();
     }
   });
