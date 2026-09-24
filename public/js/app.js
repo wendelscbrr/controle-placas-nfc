@@ -23,6 +23,26 @@ const state = {
 // =============================================================================
 
 /**
+ * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
+ */
+function getTodayDateStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
+/**
+ * Escapa caracteres HTML para exibição segura de textos digitados por usuários
+ */
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
  * Formata um número para o padrão monetário brasileiro (Ex: 1250.5 -> "R$ 1.250,50")
  */
 function formatBRL(value) {
@@ -35,7 +55,8 @@ function formatBRL(value) {
  */
 function formatDate(dateStr) {
   if (!dateStr) return '-';
-  const parts = dateStr.split('-');
+  const pureDate = dateStr.includes(' ') ? dateStr.split(' ')[0] : dateStr;
+  const parts = pureDate.split('-');
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
@@ -69,10 +90,10 @@ function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
     modal.classList.add('open');
-    // Preenche a data de hoje por padrão em formulários de registro
+    // Preenche a data de hoje (horário de Brasília) por padrão em formulários de registro
     const dateInput = modal.querySelector('input[type="date"]');
     if (dateInput && !dateInput.value) {
-      dateInput.value = new Date().toISOString().split('T')[0];
+      dateInput.value = getTodayDateStr();
     }
     if (modalId === 'modal-sale') {
       updateSaleDateStatusHint();
@@ -111,13 +132,23 @@ function resetExpenseModalForNew() {
   if (form) form.reset();
   const dateInput = document.getElementById('expense-date');
   if (dateInput) {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-    dateInput.value = today;
+    dateInput.value = getTodayDateStr();
   }
   const btnSubmit = document.getElementById('btn-submit-expense');
   if (btnSubmit) btnSubmit.textContent = 'Salvar Gasto';
   const expenseCalcHint = document.getElementById('expense-calc-total');
   if (expenseCalcHint) expenseCalcHint.textContent = 'Total Calculado: R$ 0,00';
+}
+
+function resetNoteModalForNew() {
+  const titleEl = document.getElementById('modal-note-title');
+  if (titleEl) titleEl.textContent = 'Nova Anotação';
+  const idInput = document.getElementById('note-id');
+  if (idInput) idInput.value = '';
+  const form = document.getElementById('form-note');
+  if (form) form.reset();
+  const btnSubmit = form?.querySelector('button[type="submit"]');
+  if (btnSubmit) btnSubmit.textContent = 'Salvar Anotação';
 }
 
 function closeModal(modalId) {
@@ -131,6 +162,9 @@ function closeModal(modalId) {
     }
     if (modalId === 'modal-expense') {
       resetExpenseModalForNew();
+    }
+    if (modalId === 'modal-note') {
+      resetNoteModalForNew();
     }
   }
 }
@@ -177,9 +211,7 @@ function setupModalListeners() {
   });
   document.getElementById('btn-open-modal-seller')?.addEventListener('click', () => openModal('modal-seller'));
   document.getElementById('btn-open-modal-note')?.addEventListener('click', () => {
-    document.getElementById('modal-note-title').textContent = 'Nova Anotação';
-    document.getElementById('note-id').value = '';
-    document.getElementById('form-note')?.reset();
+    resetNoteModalForNew();
     openModal('modal-note');
   });
 
@@ -1160,6 +1192,21 @@ async function loadReports() {
   }
 }
 
+/**
+ * Configura os botões de agrupamento de relatórios (Dia, Semana, Mês, Ano)
+ */
+function setupReportButtons() {
+  const buttons = document.querySelectorAll('.report-group-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.reportGroup = btn.getAttribute('data-group') || 'month';
+      loadReports();
+    });
+  });
+}
+
 // =============================================================================
 // MÓDULO: ANOTAÇÕES DOS SÓCIOS (MULTI-LINHAS)
 // =============================================================================
@@ -1187,10 +1234,10 @@ async function loadNotes() {
       <div class="note-card">
         <div class="card-accent-top card-accent-cyan"></div>
         <div class="note-header">
-          <h3 class="note-title">${note.title || 'Sem Título'}</h3>
-          <span class="badge badge-indigo">${note.author || 'Geral'}</span>
+          <h3 class="note-title">${escapeHTML(note.title) || 'Sem Título'}</h3>
+          <span class="badge badge-indigo">${escapeHTML(note.author) || 'Geral'}</span>
         </div>
-        <div class="note-content-box">${note.content}</div>
+        <div class="note-content-box">${escapeHTML(note.content)}</div>
         <div class="note-footer">
           <span>🕒 ${formatDate(note.created_at ? note.created_at.split(' ')[0] : '')}</span>
           <div class="note-actions">
@@ -1211,17 +1258,24 @@ function setupNoteForm() {
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const id = document.getElementById('note-id').value;
+    const id = document.getElementById('note-id')?.value;
+    const content = document.getElementById('note-content')?.value || '';
+
+    if (!content.trim()) {
+      showToast('O conteúdo da anotação não pode ficar em branco.', 'error');
+      return;
+    }
+
     const data = {
-      title: document.getElementById('note-title').value,
-      author: document.getElementById('note-author').value,
-      content: document.getElementById('note-content').value
+      title: document.getElementById('note-title')?.value || '',
+      author: document.getElementById('note-author')?.value || 'Geral',
+      content: content.trim()
     };
 
     try {
       if (id) {
         await API.updateNote(id, data);
-        showToast('Anotação atualizada!');
+        showToast('✓ Anotação atualizada com sucesso!');
       } else {
         await API.createNote(data);
         showToast('📝 Anotação salva com sucesso!');
@@ -1230,20 +1284,37 @@ function setupNoteForm() {
       closeModal('modal-note');
       loadNotes();
     } catch (error) {
-      showToast(error.message, 'error');
+      showToast(error.message || 'Erro ao salvar anotação', 'error');
     }
   });
 }
 
-window.editNoteItem = function(id) {
-  const note = state.notes.find(n => n.id === id);
-  if (!note) return;
+window.editNoteItem = async function(id) {
+  let note = state.notes?.find(n => Number(n.id) === Number(id));
+  if (!note) {
+    try {
+      const notes = await API.getNotes();
+      state.notes = notes;
+      note = notes.find(n => Number(n.id) === Number(id));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  if (!note) {
+    showToast('Anotação não encontrada.', 'error');
+    return;
+  }
 
   document.getElementById('modal-note-title').textContent = 'Editar Anotação';
   document.getElementById('note-id').value = note.id;
   document.getElementById('note-title').value = note.title || '';
   document.getElementById('note-author').value = note.author || 'Geral';
   document.getElementById('note-content').value = note.content || '';
+
+  const form = document.getElementById('form-note');
+  const btnSubmit = form?.querySelector('button[type="submit"]');
+  if (btnSubmit) btnSubmit.textContent = 'Salvar Alterações';
 
   openModal('modal-note');
 };

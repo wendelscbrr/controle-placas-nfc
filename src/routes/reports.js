@@ -5,6 +5,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
+/**
+ * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
+ */
+function getTodayDateStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
 // GET /api/reports/sales - Relatórios de vendas agrupados
 router.get('/sales', async (req, res) => {
   try {
@@ -129,7 +136,7 @@ router.get('/export/csv', async (req, res) => {
       csvContent += line + '\n';
     });
 
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = getTodayDateStr();
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="vendas_nfc_${dateStr}.csv"`);
     res.send(csvContent);
@@ -163,7 +170,7 @@ router.get('/export/backup', async (req, res) => {
       }
     };
 
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = getTodayDateStr();
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="backup_gestao_nfc_${dateStr}.json"`);
     res.send(JSON.stringify(backup, null, 2));

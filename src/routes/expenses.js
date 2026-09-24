@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
+/**
+ * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
+ */
+function getTodayDateStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
 // GET /api/expenses - Listar gastos com filtros opcionais
 router.get('/', async (req, res) => {
   try {
@@ -118,7 +125,7 @@ router.post('/', async (req, res) => {
 
     // O sistema calcula o valor total automaticamente (Regra do Negócio)
     const totalCost = Number((qty * unitPrice).toFixed(2));
-    const purchaseDate = date || new Date().toISOString().split('T')[0];
+    const purchaseDate = date || getTodayDateStr();
     const categoryName = category && category.trim() !== '' ? category.trim() : 'Outros';
 
     const result = await db.run(`

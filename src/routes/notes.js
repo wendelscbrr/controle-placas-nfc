@@ -2,6 +2,20 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 
+/**
+ * Retorna data e hora formatada em padrão ISO/SQL (YYYY-MM-DD HH:mm:ss) no fuso horário de Brasília
+ */
+function getBrasiliaTimestamp() {
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(now);
+  const timeStr = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  }).format(now);
+  return `${dateStr} ${timeStr}`;
+}
+
 // GET /api/notes - Listar todas as anotações
 router.get('/', async (req, res) => {
   try {
@@ -28,13 +42,21 @@ router.post('/', async (req, res) => {
 
     const noteTitle = title && title.trim() !== '' ? title.trim() : 'Sem Título';
     const noteAuthor = author && author.trim() !== '' ? author.trim() : 'Geral';
+    const nowBrasilia = getBrasiliaTimestamp();
 
     const result = await db.run(`
       INSERT INTO notes (title, content, author, created_at, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `, noteTitle, content.trim(), noteAuthor);
+      VALUES (?, ?, ?, ?, ?)
+    `, noteTitle, content.trim(), noteAuthor, nowBrasilia, nowBrasilia);
 
-    const newNote = await db.get('SELECT * FROM notes WHERE id = ?', result.lastInsertRowid);
+    let newNote = null;
+    if (result && result.lastInsertRowid) {
+      newNote = await db.get('SELECT * FROM notes WHERE id = ?', result.lastInsertRowid);
+    }
+    if (!newNote) {
+      newNote = await db.get('SELECT * FROM notes ORDER BY id DESC LIMIT 1');
+    }
+
     res.status(201).json(newNote);
   } catch (error) {
     console.error('Erro ao criar anotação:', error);
@@ -61,11 +83,12 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'O conteúdo da anotação não pode ficar em branco.' });
     }
 
+    const nowBrasilia = getBrasiliaTimestamp();
     await db.run(`
       UPDATE notes 
-      SET title = ?, content = ?, author = ?, updated_at = CURRENT_TIMESTAMP
+      SET title = ?, content = ?, author = ?, updated_at = ?
       WHERE id = ?
-    `, updatedTitle, updatedContent, updatedAuthor, id);
+    `, updatedTitle, updatedContent, updatedAuthor, nowBrasilia, id);
 
     const updatedNote = await db.get('SELECT * FROM notes WHERE id = ?', id);
     res.json(updatedNote);

@@ -6,40 +6,52 @@ const router = express.Router();
 const db = require('../database/db');
 
 /**
+ * Retorna a data atual no formato YYYY-MM-DD considerando o fuso horário de Brasília
+ */
+function getBrasiliaDateInfo() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const todayStr = formatter.format(now);
+  const [year, month, day] = todayStr.split('-').map(Number);
+  return { now, todayStr, year, month, day };
+}
+
+/**
  * Converte o parâmetro 'period' em um intervalo de datas (startDate e endDate)
+ * baseado no fuso horário de Brasília (America/Sao_Paulo)
  */
 function resolveDateRange(period, customStart, customEnd) {
-  const now = new Date();
-  const format = (d) => d.toISOString().split('T')[0];
-
-  const todayStr = format(now);
+  const { todayStr, year, month, day } = getBrasiliaDateInfo();
 
   switch (period) {
     case 'today':
       return { startDate: todayStr, endDate: todayStr, label: 'Hoje' };
 
     case '7days': {
-      const past = new Date(now);
+      const past = new Date(year, month - 1, day);
       past.setDate(past.getDate() - 6);
-      return { startDate: format(past), endDate: todayStr, label: 'Últimos 7 dias' };
+      const startStr = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
+      return { startDate: startStr, endDate: todayStr, label: 'Últimos 7 dias' };
     }
 
     case 'week': {
-      // Começo da semana atual (segunda-feira)
-      const day = now.getDay();
-      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const startOfWeek = new Date(now.setDate(diff));
-      return { startDate: format(startOfWeek), endDate: todayStr, label: 'Esta Semana' };
+      // Começo da semana atual (segunda-feira) sem mutação in-place de objeto
+      const current = new Date(year, month - 1, day);
+      const dayOfWeek = current.getDay(); // 0: domingo, 1: segunda...
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      current.setDate(current.getDate() + diff);
+      const startStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+      return { startDate: startStr, endDate: todayStr, label: 'Esta Semana' };
     }
 
     case 'month': {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { startDate: format(startOfMonth), endDate: todayStr, label: 'Este Mês' };
+      const startStr = `${year}-${String(month).padStart(2, '0')}-01`;
+      return { startDate: startStr, endDate: todayStr, label: 'Este Mês' };
     }
 
     case 'year': {
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      return { startDate: format(startOfYear), endDate: todayStr, label: 'Este Ano' };
+      const startStr = `${year}-01-01`;
+      return { startDate: startStr, endDate: todayStr, label: 'Este Ano' };
     }
 
     case 'custom':
@@ -58,8 +70,8 @@ function resolveDateRange(period, customStart, customEnd) {
 // GET /api/dashboard - Indicadores consolidados e dados para gráficos
 router.get('/', async (req, res) => {
   try {
-    // Sincroniza vendas pendentes cuja data já chegou
-    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    // Sincroniza vendas pendentes cuja data já chegou (Horário de Brasília)
+    const { todayStr } = getBrasiliaDateInfo();
     await db.run("UPDATE sales SET status = 'pago' WHERE status = 'pendente' AND date <= ?", todayStr);
 
     const { period, startDate: customStart, endDate: customEnd } = req.query;
